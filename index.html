@@ -565,26 +565,97 @@ function resizeCanvasToCss(canvas){
   return {w,h,dpr};
 }
 let techChartState=null;
+const technicalDataCache = new Map();
+let technicalLoadToken=0;
+let chartInteractionFrame=null;
+let pendingChartInteraction=null;
+
+function drawPriceSelection(ctx,state,selectedIndex){
+  if(selectedIndex==null || selectedIndex<0 || selectedIndex>=state.dates.length) return;
+  const {x,y,pad,w,h,dpr,closes}=state;
+  const xx=x(selectedIndex);
+  ctx.save();
+  ctx.strokeStyle="#8f6f4f";
+  ctx.lineWidth=1.25*dpr;
+  ctx.setLineDash([4*dpr,4*dpr]);
+  ctx.beginPath();
+  ctx.moveTo(xx,pad.t);
+  ctx.lineTo(xx,h-pad.b);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const cv=closes[selectedIndex];
+  if(cv!=null && Number.isFinite(cv)){
+    const yy=y(cv);
+    ctx.fillStyle="#8f6f4f";
+    ctx.beginPath();
+    ctx.arc(xx,yy,4.2*dpr,0,Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle="#fffaf0";
+    ctx.lineWidth=2*dpr;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 
 function drawTechnicalChart(dates, closes, ma5, ma10, ma20, ma60, selectedIndex=null){
-  const c=document.getElementById("priceCanvas"), ctx=c.getContext("2d");
+  const c=document.getElementById("priceCanvas");
+  const ctx=c.getContext("2d");
   const {w,h,dpr}=resizeCanvasToCss(c);
-  ctx.clearRect(0,0,w,h);
+  const sameData=techChartState &&
+    techChartState.dates===dates &&
+    techChartState.closes===closes &&
+    techChartState.ma5===ma5 &&
+    techChartState.ma10===ma10 &&
+    techChartState.ma20===ma20 &&
+    techChartState.ma60===ma60 &&
+    techChartState.w===w &&
+    techChartState.h===h &&
+    techChartState.baseCanvas;
+
+  if(sameData){
+    ctx.clearRect(0,0,w,h);
+    ctx.drawImage(techChartState.baseCanvas,0,0);
+    techChartState.selectedIndex=selectedIndex;
+    drawPriceSelection(ctx,techChartState,selectedIndex);
+    return;
+  }
+
   const pad={l:58*dpr,r:16*dpr,t:18*dpr,b:32*dpr};
-  const vals=[...closes,...ma5,...ma10,...ma20,...ma60].filter(v=>v!=null&&Number.isFinite(v));
-  if(!vals.length) return;
-  let min=Math.min(...vals), max=Math.max(...vals);
-  const ext=(max-min||1)*0.08; min-=ext; max+=ext;
-  const x=i=>pad.l+(w-pad.l-pad.r)*(i/(Math.max(1,dates.length-1)));
+  let min=Infinity;
+  let max=-Infinity;
+  const series=[closes,ma5,ma10,ma20,ma60];
+  for(const arr of series){
+    for(const v of arr){
+      if(v!=null && Number.isFinite(v)){
+        if(v<min) min=v;
+        if(v>max) max=v;
+      }
+    }
+  }
+  if(!Number.isFinite(min) || !Number.isFinite(max)) return;
+
+  const ext=(max-min||1)*0.08;
+  min-=ext;
+  max+=ext;
+  const denominator=Math.max(1,dates.length-1);
+  const x=i=>pad.l+(w-pad.l-pad.r)*(i/denominator);
   const y=v=>pad.t+(h-pad.t-pad.b)*(1-(v-min)/(max-min));
 
-  techChartState={dates,closes,ma5,ma10,ma20,ma60,w,h,dpr,pad,min,max,x,y,selectedIndex};
+  const state={dates,closes,ma5,ma10,ma20,ma60,w,h,dpr,pad,min,max,x,y,selectedIndex:null,baseCanvas:null};
+  techChartState=state;
 
-  ctx.strokeStyle="#d7c8b1"; ctx.lineWidth=1*dpr;
-  ctx.fillStyle="#000"; ctx.font=`${11*dpr}px "DFKai-SB","標楷體",serif`;
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle="#d7c8b1";
+  ctx.lineWidth=1*dpr;
+  ctx.fillStyle="#000";
+  ctx.font=(11*dpr)+"px \"DFKai-SB\",\"標楷體\",serif";
   for(let i=0;i<5;i++){
     const yy=pad.t+(h-pad.t-pad.b)*i/4;
-    ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(w-pad.r,yy);ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(pad.l,yy);
+    ctx.lineTo(w-pad.r,yy);
+    ctx.stroke();
     const val=max-(max-min)*i/4;
     ctx.fillText(fmtNum(val,1),4*dpr,yy+4*dpr);
   }
@@ -594,55 +665,61 @@ function drawTechnicalChart(dates, closes, ma5, ma10, ma20, ma60, selectedIndex=
     [ma5,"#a66f00",1.5],
     [ma10,"#a14959",1.5],
     [ma20,"#4378a8",1.5],
-    [ma60,"#4f825d",1.5],
+    [ma60,"#4f825d",1.5]
   ];
   for(const [arr,color,lw] of lines){
-    ctx.strokeStyle=color;ctx.lineWidth=lw*dpr;ctx.beginPath();
+    ctx.strokeStyle=color;
+    ctx.lineWidth=lw*dpr;
+    ctx.beginPath();
     let started=false;
-    arr.forEach((v,i)=>{
-      if(v==null||!Number.isFinite(v)) return;
-      const xx=x(i), yy=y(v);
-      if(!started){ctx.moveTo(xx,yy);started=true;} else ctx.lineTo(xx,yy);
-    });
+    for(let i=0;i<arr.length;i++){
+      const v=arr[i];
+      if(v==null || !Number.isFinite(v)) continue;
+      const xx=x(i);
+      const yy=y(v);
+      if(!started){
+        ctx.moveTo(xx,yy);
+        started=true;
+      }else{
+        ctx.lineTo(xx,yy);
+      }
+    }
     ctx.stroke();
   }
 
-  const tickCount=6;
   ctx.fillStyle="#000";
+  const tickCount=6;
   for(let j=0;j<tickCount;j++){
     const i=Math.round((dates.length-1)*j/(tickCount-1));
     const dt=new Date(dates[i]*1000);
-    const label=`${dt.getMonth()+1}/${dt.getDate()}`;
+    const label=(dt.getMonth()+1)+"/"+dt.getDate();
     const xx=x(i);
     ctx.fillText(label,Math.max(pad.l,xx-15*dpr),h-8*dpr);
   }
 
-  const legend=[["收盤","#2f2f2f"],["MA5","#a66f00"],["MA10","#a14959"],["MA20","#4378a8"],["MA60","#4f825d"]];
+  const legend=[
+    ["收盤","#2f2f2f"],
+    ["MA5","#a66f00"],
+    ["MA10","#a14959"],
+    ["MA20","#4378a8"],
+    ["MA60","#4f825d"]
+  ];
   let lx=pad.l;
-  legend.forEach(([name,color])=>{
-    ctx.fillStyle=color;ctx.fillRect(lx,pad.t,14*dpr,3*dpr);
-    ctx.fillStyle="#000";ctx.fillText(name,lx+19*dpr,pad.t+5*dpr);
+  for(const [name,color] of legend){
+    ctx.fillStyle=color;
+    ctx.fillRect(lx,pad.t,14*dpr,3*dpr);
+    ctx.fillStyle="#000";
+    ctx.fillText(name,lx+19*dpr,pad.t+5*dpr);
     lx+=74*dpr;
-  });
-
-  if(selectedIndex!=null && selectedIndex>=0 && selectedIndex<dates.length){
-    const xx=x(selectedIndex);
-    ctx.save();
-    ctx.strokeStyle="#8f6f4f";
-    ctx.lineWidth=1.25*dpr;
-    ctx.setLineDash([4*dpr,4*dpr]);
-    ctx.beginPath();ctx.moveTo(xx,pad.t);ctx.lineTo(xx,h-pad.b);ctx.stroke();
-    ctx.setLineDash([]);
-
-    const cv=closes[selectedIndex];
-    if(cv!=null&&Number.isFinite(cv)){
-      const yy=y(cv);
-      ctx.fillStyle="#8f6f4f";
-      ctx.beginPath();ctx.arc(xx,yy,4.2*dpr,0,Math.PI*2);ctx.fill();
-      ctx.strokeStyle="#fffaf0";ctx.lineWidth=2*dpr;ctx.stroke();
-    }
-    ctx.restore();
   }
+
+  const baseCanvas=document.createElement("canvas");
+  baseCanvas.width=w;
+  baseCanvas.height=h;
+  baseCanvas.getContext("2d").drawImage(c,0,0);
+  state.baseCanvas=baseCanvas;
+  state.selectedIndex=selectedIndex;
+  drawPriceSelection(ctx,state,selectedIndex);
 }
 
 function showChartTooltip(index, clientX=null, clientY=null){
@@ -690,8 +767,20 @@ function chartIndexFromPointer(e){
   return idx;
 }
 
+function queueSynchronizedSelect(idx, e=null, source="price"){
+  if(!techChartState || idx==null) return;
+  pendingChartInteraction={idx,e,source};
+  if(chartInteractionFrame!=null) return;
+  chartInteractionFrame=requestAnimationFrame(()=>{
+    chartInteractionFrame=null;
+    const next=pendingChartInteraction;
+    pendingChartInteraction=null;
+    if(next) synchronizedSelect(next.idx,next.e,next.source);
+  });
+}
+
 function selectChartIndex(idx, e=null){
-  synchronizedSelect(idx,e,"price");
+  queueSynchronizedSelect(idx,e,"price");
 }
 
 function initInteractiveTechnicalChart(){
@@ -723,46 +812,88 @@ function initInteractiveTechnicalChart(){
   });
 }
 
-function drawVolumeChart(volumes, selectedIndex=null){
-  const c=document.getElementById("volumeCanvas"), ctx=c.getContext("2d");
-  const {w,h,dpr}=resizeCanvasToCss(c);
-  ctx.clearRect(0,0,w,h);
-  const pad={l:58*dpr,r:16*dpr,t:12*dpr,b:18*dpr};
-  const max=Math.max(...volumes.filter(v=>v!=null&&Number.isFinite(v)),1);
-  const bw=Math.max(1,(w-pad.l-pad.r)/Math.max(1,volumes.length)*0.68);
-  ctx.strokeStyle="#d7c8b1";
-  ctx.beginPath();ctx.moveTo(pad.l,h-pad.b);ctx.lineTo(w-pad.r,h-pad.b);ctx.stroke();
+function drawVolumeSelection(ctx,state,selectedIndex){
+  if(selectedIndex==null || selectedIndex<0 || selectedIndex>=state.volumes.length) return;
+  const {pad,w,h,dpr,max,volumes}=state;
+  const xx=pad.l+(w-pad.l-pad.r)*selectedIndex/Math.max(1,volumes.length-1);
+  ctx.save();
+  ctx.strokeStyle="#8f6f4f";
+  ctx.lineWidth=1.25*dpr;
+  ctx.setLineDash([4*dpr,4*dpr]);
+  ctx.beginPath();
+  ctx.moveTo(xx,pad.t);
+  ctx.lineTo(xx,h-pad.b);
+  ctx.stroke();
+  ctx.setLineDash([]);
 
-  volumes.forEach((v,i)=>{
-    if(v==null||!Number.isFinite(v)) return;
-    const x=pad.l+(w-pad.l-pad.r)*i/Math.max(1,volumes.length-1);
+  const v=volumes[selectedIndex];
+  if(v!=null && Number.isFinite(v)){
     const bh=(h-pad.t-pad.b)*(v/max);
-    ctx.fillStyle="#9f8265";
-    ctx.fillRect(x-bw/2,h-pad.b-bh,bw,bh);
-  });
+    const yy=h-pad.b-bh;
+    ctx.fillStyle="#8f6f4f";
+    ctx.beginPath();
+    ctx.arc(xx,yy,3.8*dpr,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
 
-  if(selectedIndex!=null && selectedIndex>=0 && selectedIndex<volumes.length){
-    const xx=pad.l+(w-pad.l-pad.r)*selectedIndex/Math.max(1,volumes.length-1);
-    ctx.save();
-    ctx.strokeStyle="#8f6f4f";
-    ctx.lineWidth=1.25*dpr;
-    ctx.setLineDash([4*dpr,4*dpr]);
-    ctx.beginPath();ctx.moveTo(xx,pad.t);ctx.lineTo(xx,h-pad.b);ctx.stroke();
-    ctx.setLineDash([]);
+function drawVolumeChart(volumes, selectedIndex=null){
+  const c=document.getElementById("volumeCanvas");
+  const ctx=c.getContext("2d");
+  const {w,h,dpr}=resizeCanvasToCss(c);
+  const sameData=techVolumeState &&
+    techVolumeState.volumes===volumes &&
+    techVolumeState.w===w &&
+    techVolumeState.h===h &&
+    techVolumeState.baseCanvas;
 
-    const v=volumes[selectedIndex];
-    if(v!=null&&Number.isFinite(v)){
-      const bh=(h-pad.t-pad.b)*(v/max);
-      const yy=h-pad.b-bh;
-      ctx.fillStyle="#8f6f4f";
-      ctx.beginPath();ctx.arc(xx,yy,3.8*dpr,0,Math.PI*2);ctx.fill();
-    }
-    ctx.restore();
+  if(sameData){
+    ctx.clearRect(0,0,w,h);
+    ctx.drawImage(techVolumeState.baseCanvas,0,0);
+    techVolumeState.selectedIndex=selectedIndex;
+    drawVolumeSelection(ctx,techVolumeState,selectedIndex);
+    return;
   }
 
-  ctx.fillStyle="#000";ctx.font=`${11*dpr}px "DFKai-SB","標楷體",serif`;
+  const pad={l:58*dpr,r:16*dpr,t:12*dpr,b:18*dpr};
+  let max=1;
+  for(const v of volumes){
+    if(v!=null && Number.isFinite(v) && v>max) max=v;
+  }
+  const denominator=Math.max(1,volumes.length-1);
+  const bw=Math.max(1,(w-pad.l-pad.r)/Math.max(1,volumes.length)*0.68);
+
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle="#d7c8b1";
+  ctx.lineWidth=1*dpr;
+  ctx.beginPath();
+  ctx.moveTo(pad.l,h-pad.b);
+  ctx.lineTo(w-pad.r,h-pad.b);
+  ctx.stroke();
+
+  for(let i=0;i<volumes.length;i++){
+    const v=volumes[i];
+    if(v==null || !Number.isFinite(v)) continue;
+    const xx=pad.l+(w-pad.l-pad.r)*i/denominator;
+    const bh=(h-pad.t-pad.b)*(v/max);
+    ctx.fillStyle="#9f8265";
+    ctx.fillRect(xx-bw/2,h-pad.b-bh,bw,bh);
+  }
+
+  ctx.fillStyle="#000";
+  ctx.font=(11*dpr)+"px \"DFKai-SB\",\"標楷體\",serif";
   ctx.fillText("最大量 "+fmtNum(max/1000,0)+"K",4*dpr,18*dpr);
-  techVolumeState={volumes,w,h,dpr,pad,max,selectedIndex};
+
+  const state={volumes,w,h,dpr,pad,max,selectedIndex:null,baseCanvas:null};
+  const baseCanvas=document.createElement("canvas");
+  baseCanvas.width=w;
+  baseCanvas.height=h;
+  baseCanvas.getContext("2d").drawImage(c,0,0);
+  state.baseCanvas=baseCanvas;
+  techVolumeState=state;
+  state.selectedIndex=selectedIndex;
+  drawVolumeSelection(ctx,state,selectedIndex);
 }
 
 let techVolumeState=null;
@@ -798,23 +929,29 @@ function showVolumeTooltip(index, clientX=null, clientY=null){
 
 function synchronizedSelect(idx, e=null, source="price"){
   if(!techChartState || idx==null) return;
-
-  drawTechnicalChart(
-    techChartState.dates,
-    techChartState.closes,
-    techChartState.ma5,
-    techChartState.ma10,
-    techChartState.ma20,
-    techChartState.ma60,
-    idx
-  );
-
-  if(techVolumeState){
-    drawVolumeChart(techVolumeState.volumes,idx);
+  const changed=idx!==techChartState.selectedIndex;
+  if(changed){
+    drawTechnicalChart(
+      techChartState.dates,
+      techChartState.closes,
+      techChartState.ma5,
+      techChartState.ma10,
+      techChartState.ma20,
+      techChartState.ma60,
+      idx
+    );
+    if(techVolumeState) drawVolumeChart(techVolumeState.volumes,idx);
   }
-
-  showChartTooltip(idx, source==="price" ? (e?.clientX??null) : null, source==="price" ? (e?.clientY??null) : null);
-  showVolumeTooltip(idx, source==="volume" ? (e?.clientX??null) : null, source==="volume" ? (e?.clientY??null) : null);
+  showChartTooltip(
+    idx,
+    source==="price" ? (e?.clientX??null) : null,
+    source==="price" ? (e?.clientY??null) : null
+  );
+  showVolumeTooltip(
+    idx,
+    source==="volume" ? (e?.clientX??null) : null,
+    source==="volume" ? (e?.clientY??null) : null
+  );
 }
 
 function volumeIndexFromPointer(e){
@@ -838,19 +975,19 @@ function initInteractiveVolumeChart(){
   c.addEventListener("pointermove",e=>{
     if(e.pointerType==="mouse"){
       const idx=volumeIndexFromPointer(e);
-      synchronizedSelect(idx,e,"volume");
+      queueSynchronizedSelect(idx,e,"volume");
     }
   });
   c.addEventListener("pointerdown",e=>{
     const idx=volumeIndexFromPointer(e);
-    synchronizedSelect(idx,e,"volume");
+    queueSynchronizedSelect(idx,e,"volume");
   });
   c.addEventListener("keydown",e=>{
     if(!techChartState||!techVolumeState) return;
     let idx=techChartState.selectedIndex;
     if(idx==null) idx=techChartState.dates.length-1;
-    if(e.key==="ArrowLeft"){e.preventDefault();idx=Math.max(0,idx-1);synchronizedSelect(idx,null,"volume");}
-    if(e.key==="ArrowRight"){e.preventDefault();idx=Math.min(techChartState.dates.length-1,idx+1);synchronizedSelect(idx,null,"volume");}
+    if(e.key==="ArrowLeft"){e.preventDefault();idx=Math.max(0,idx-1);queueSynchronizedSelect(idx,null,"volume");}
+    if(e.key==="ArrowRight"){e.preventDefault();idx=Math.min(techChartState.dates.length-1,idx+1);queueSynchronizedSelect(idx,null,"volume");}
   });
 }
 
@@ -864,6 +1001,7 @@ async function loadYahooTechnical(stock){
   document.getElementById("yahooLink").href=`https://tw.stock.yahoo.com/quote/${stock.code}.TW/technical-analysis`;
   const retry=document.getElementById("retryTech");
   if(retry) retry.onclick=()=>loadYahooTechnical(stock);
+  const requestToken=++technicalLoadToken;
 
   async function fetchYahoo(){
     const yahooUrl=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=6mo&interval=1d&includePrePost=false&events=div%2Csplits`;
@@ -917,13 +1055,19 @@ async function loadYahooTechnical(stock){
   }
 
   try{
-    let data;
-    try{
-      data=await fetchYahoo();
-    }catch(yahooErr){
-      console.warn("Yahoo blocked, switching to exchange-backed fallback",yahooErr);
-      document.getElementById("techStatus").textContent="Yahoo 被瀏覽器阻擋，正在切換台股交易所資料備援…";
-      data=await fetchFinMind();
+    const cacheKey=ticker;
+    let data=technicalDataCache.get(cacheKey);
+    if(!data){
+      try{
+        data=await fetchYahoo();
+      }catch(yahooErr){
+        if(requestToken!==technicalLoadToken) return;
+        console.warn("Yahoo blocked, switching to exchange-backed fallback",yahooErr);
+        document.getElementById("techStatus").textContent="Yahoo 被瀏覽器阻擋，正在切換台股交易所資料備援…";
+        data=await fetchFinMind();
+      }
+      if(requestToken!==technicalLoadToken) return;
+      technicalDataCache.set(cacheKey,data);
     }
 
     const ts=data.timestamps, closes=data.close, opens=data.open, highs=data.high, lows=data.low, volumes=data.volume;
@@ -961,6 +1105,7 @@ async function loadYahooTechnical(stock){
     }));
     panel.scrollIntoView({behavior:"smooth",block:"start"});
   }catch(err){
+    if(requestToken!==technicalLoadToken) return;
     console.error(err);
     document.getElementById("techStatus").textContent="歷史行情載入失敗。請確認網路連線後按「重新載入技術圖表」。";
     document.getElementById("techMetrics").innerHTML=`
@@ -1030,12 +1175,17 @@ function renderTable(){
   document.getElementById("summary").innerHTML=
     `<span class="pill">符合：${arr.length} 檔</span><span class="pill">上市：${l}</span><span class="pill">上櫃：${o}</span>`;
 }
+let chartResizeFrame=null;
 window.addEventListener("resize",()=>{
-  if(techChartState){
-    const st=techChartState;
-    drawTechnicalChart(st.dates,st.closes,st.ma5,st.ma10,st.ma20,st.ma60,st.selectedIndex);
-    if(techVolumeState) drawVolumeChart(techVolumeState.volumes,st.selectedIndex);
-  }
+  if(chartResizeFrame!=null) cancelAnimationFrame(chartResizeFrame);
+  chartResizeFrame=requestAnimationFrame(()=>{
+    chartResizeFrame=null;
+    if(techChartState){
+      const st=techChartState;
+      drawTechnicalChart(st.dates,st.closes,st.ma5,st.ma10,st.ma20,st.ma60,st.selectedIndex);
+      if(techVolumeState) drawVolumeChart(techVolumeState.volumes,st.selectedIndex);
+    }
+  });
 });
 initSearch();
 loadOfficial();
