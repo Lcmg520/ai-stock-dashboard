@@ -1,0 +1,1027 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 台股族群雷達 V2</title>
+<style>
+:root{
+  --bg:#f3ead8;--panel:#fffaf0;--panel2:#f8f0e2;--line:#d6c7ae;--text:#000000;--muted:#000000;
+  --blue:#8f6f4f;--blue2:#6f5136;--red:#b85c5c;--green:#5f8b6f;--yellow:#b58a45;
+}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#f7f0e4,#efe2cf);color:var(--text);
+font-family:"DFKai-SB","標楷體","BiauKai","KaiTi",serif}
+.app{max-width:1580px;margin:auto;padding:18px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px}
+h1{margin:0;font-size:28px}.subtitle{color:var(--muted);font-size:13px;margin-top:6px}
+.status{border:1px solid #314667;background:#efe3d2;border-radius:999px;padding:8px 12px;font-size:12px;color:#5f4d3a}
+.layout{display:grid;grid-template-columns:310px 1fr;gap:16px}
+.panel{background:rgba(255,250,240,.98);border:1px solid var(--line);border-radius:18px;box-shadow:0 14px 34px rgba(0,0,0,.16)}
+.sidebar{padding:14px;position:sticky;top:12px;height:calc(100vh - 24px);overflow:auto}
+.sec{margin:7px 0 10px;color:#9eb1ce;font-weight:800;font-size:12px;letter-spacing:.06em}
+.grp{display:flex;flex-direction:column;gap:7px;margin-bottom:16px}
+.btn{width:100%;border:1px solid #20314b;background:#f8efe1;color:#eaf2ff;border-radius:11px;padding:10px 11px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;gap:10px;user-select:none}
+.btn:active{transform:translateY(1px);background:#ecd8bd}
+.btn:hover,.btn.active{border-color:#c7ae8d;background:#f6e6cf}.count{color:#8aa6cf}
+.main{display:flex;flex-direction:column;gap:14px}
+.toolbar{padding:14px;display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center}
+.searchBox{display:grid;grid-template-columns:1fr auto auto;gap:8px}
+.search{width:100%;background:#fffaf2;border:1px solid #233653;color:#3f3428;border-radius:11px;padding:11px 13px;outline:none}
+.search:focus{border-color:#c4a47c;box-shadow:0 0 0 3px rgba(196,164,124,.18);background:#fffdf8}
+.searchBtn,.clearBtn{border:1px solid #31527d;border-radius:11px;padding:0 15px;cursor:pointer;font-weight:700}
+.searchBtn{background:#8f6f4f;color:white}.clearBtn{background:#efe3d2;color:#5f4d3a}
+select{background:#fffaf2;color:#3f3428;border:1px solid #233653;border-radius:11px;padding:10px}
+.hero{padding:18px}
+.hero h2{margin:0 0 4px;font-size:24px}.hero p{margin:0;color:var(--muted);font-size:13px;line-height:1.6}
+.pills{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+.resultCard{padding:18px;display:none}
+.resultCard.show{display:block}
+.resultHead{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.resultTitle{font-size:26px;font-weight:900;margin:0}
+.resultCode{color:#9fb3cf;font-size:13px;margin-top:4px}
+.infoGrid{display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:10px;margin-top:16px}
+.infoBox{background:#f8efe1;border:1px solid #22334d;border-radius:12px;padding:12px}
+.infoBox span{display:block;color:var(--muted);font-size:12px}
+.infoBox b{display:block;margin-top:5px;font-size:15px}
+.resultTags{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}
+.resultActions{margin-top:14px}
+.resultActions button{background:#8f6f4f;color:#3f3428;border:0;border-radius:10px;padding:9px 12px;cursor:pointer;font-weight:700}
+.techPanel{padding:18px;display:none}
+.techPanel.show{display:block}
+.techHead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.techHead h3{margin:0;font-size:20px}
+.techStatus{font-size:12px;color:var(--muted)}
+.chartGrid{display:grid;grid-template-columns:1fr;gap:14px;margin-top:14px}
+.chartBox{background:#fffaf2;border:1px solid #20314b;border-radius:14px;padding:12px}
+.chartBox h4{margin:0 0 8px;font-size:13px;color:#a9bad2}
+.chartCanvas{width:100%;height:360px;display:block;background:#f5eadb;border-radius:10px}
+.volumeCanvas{width:100%;height:130px;display:block;background:#f5eadb;border-radius:10px}
+.techMetrics{display:grid;grid-template-columns:repeat(6,minmax(110px,1fr));gap:9px;margin-top:12px}
+.techMetric{background:#f8efe1;border:1px solid #22334d;border-radius:12px;padding:10px}
+.techMetric span{display:block;color:var(--muted);font-size:11px}
+.techMetric b{display:block;margin-top:5px;font-size:14px}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:11px;color:#a9bad2}
+.yahooLink{display:inline-block;margin-top:12px;color:#b9d2ff;text-decoration:none;border:1px solid #31527d;border-radius:10px;padding:8px 11px;background:#eadbc7}
+tr.stockRow{cursor:pointer}
+tr.stockRow:hover td{background:#f6e6cf}
+.finBtn{border:1px solid #355b89;background:#8f6f4f;color:#fffaf0;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;font-weight:700}
+.finBtn:hover{background:#b98f66;color:#fffaf0}
+
+@media(max-width:900px){.techMetrics{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:560px){.techMetrics{grid-template-columns:repeat(2,1fr)}.chartCanvas{height:300px}}
+
+@media(max-width:760px){.infoGrid{grid-template-columns:repeat(2,1fr)}}
+.pill{padding:6px 9px;border-radius:999px;background:#f0e2cf;border:1px solid #29415f;color:#6a573f;font-size:12px}
+.tableWrap{overflow:auto}
+table{width:100%;border-collapse:collapse;min-width:900px}
+th,td{padding:12px 14px;border-bottom:1px solid #1e2c42;text-align:left;font-size:13px}
+th{position:sticky;top:0;background:#eadbc7;color:#6f604d;z-index:1}
+tr:hover td{background:#f8ead8}
+.code{font-weight:800;font-size:14px}.name{font-weight:700}
+.tag{font-size:11px;padding:4px 7px;border-radius:999px;border:1px solid #315075;background:#eadbc7;color:#6b573d}
+.market.L{color:#ffb1ba}.market.O{color:#89e1bd}
+.muted{color:var(--muted)}
+.note{padding:13px 15px;border:1px dashed #304566;background:#fffaf2;border-radius:13px;color:#746653;font-size:12px;line-height:1.65}
+.footer{color:#8294ae;font-size:11px;padding:0 3px 8px}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{position:static;height:auto}.toolbar{grid-template-columns:1fr}.searchBox{grid-template-columns:1fr auto auto}.top{flex-direction:column}}
+@media(max-width:560px){.searchBox{grid-template-columns:1fr 1fr}.search{grid-column:1/-1}}
+
+.btn,.finBtn,.search,tr td{transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease,color .18s ease}
+.btn.active{box-shadow:inset 0 0 0 1px rgba(173,139,99,.18)}
+.finBtn:focus-visible,.btn:focus-visible,.search:focus-visible{outline:none}
+
+
+body, button, input, select, table, th, td, .panel, .subtitle, .status, .sec, .count,
+.hero p, .pill, .tag, .muted, .note, .footer, .resultCode, .techStatus, .legend,
+.infoBox span, .infoBox b, .techMetric span, .techMetric b, .name, .code, h1, h2, h3, h4 {
+  color:#000 !important;
+  font-family:"DFKai-SB","標楷體","BiauKai","KaiTi",serif !important;
+}
+input::placeholder{color:#555 !important;font-family:"DFKai-SB","標楷體","BiauKai","KaiTi",serif !important}
+.finBtn,.searchBtn,.clearBtn,.resultActions button,.yahooLink{
+  font-family:"DFKai-SB","標楷體","BiauKai","KaiTi",serif !important;
+  color:#000 !important;
+}
+
+
+.interactiveChartWrap{position:relative;min-width:0}
+.chartTooltip{position:absolute;display:none;pointer-events:none;z-index:5;min-width:185px;padding:10px 12px;border-radius:10px;background:rgba(255,250,240,.97);border:1px solid #c8b99f;color:#000;font-family:"DFKai-SB","標楷體","BiauKai","KaiTi",serif;font-size:12px;line-height:1.55;box-shadow:0 5px 18px rgba(70,55,35,.16)}
+.chartTooltip.show{display:block}
+.chartTooltip b{font-size:13px}
+.chartHint{margin-top:7px;font-size:11px;color:#000}
+.chartCanvas{touch-action:pan-y}
+
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div>
+      <h1>📊 AI 台股族群雷達 V2</h1>
+      <div class="subtitle">上市＋上櫃｜官方產業分類＋投資題材分類｜搜尋與篩選｜每檔股票右側皆有財報按鈕</div>
+    </div>
+    <div class="status" id="status">準備載入官方資料…</div>
+  </div>
+
+  <div class="layout">
+    <aside class="panel sidebar">
+      <div class="sec">🔥 熱門題材族群</div>
+      <div style="font-size:11px;color:#7f93b1;margin:-4px 0 9px">點擊族群即可切換右側股票清單</div>
+      <div class="grp" id="themeBtns"></div>
+      <div class="sec">🏭 官方產業分類</div>
+      <div class="grp" id="industryBtns">
+        <button class="btn active" onclick="selectAll()"><span>全部上市櫃</span><span class="count" id="allCount">—</span></button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="panel toolbar">
+        <div class="searchBox">
+          <input id="search" class="search" placeholder="搜尋股票代號、名稱、產業、題材，例如：2330、台積電、記憶體、CPO">
+          <button class="searchBtn" id="searchBtn" type="button">搜尋</button>
+          <button class="clearBtn" id="clearBtn" type="button">清除</button>
+        </div>
+        <select id="marketFilter" onchange="renderTable()">
+          <option value="ALL">上市＋上櫃</option>
+          <option value="L">只看上市</option>
+          <option value="O">只看上櫃</option>
+        </select>
+        <select id="sort" onchange="renderTable()">
+          <option value="code">依代號排序</option>
+          <option value="name">依名稱排序</option>
+          <option value="industry">依產業排序</option>
+        </select>
+      </section>
+
+      <section class="panel hero">
+        <h2 id="title">全部上市櫃股票</h2>
+        <p id="desc">官方公司基本資料會自動載入；題材族群可跨越不同官方產業。</p>
+        <div class="pills" id="summary"></div>
+      </section>
+
+      <section class="panel resultCard" id="resultCard">
+        <div class="resultHead">
+          <div>
+            <div class="resultTitle" id="resultTitle">搜尋結果</div>
+            <div class="resultCode" id="resultCode"></div>
+          </div>
+          <div class="pill" id="resultMarket"></div>
+        </div>
+        <div class="infoGrid" id="resultInfo"></div>
+        <div class="resultTags" id="resultTags"></div>
+        <div class="resultActions">
+          <button type="button" id="loadTechBtn">載入技術分析</button>
+          <button type="button" onclick="closeResult()">關閉資訊卡</button>
+        </div>
+      </section>
+
+      <section class="panel techPanel" id="techPanel">
+        <div class="techHead">
+          <div>
+            <h3 id="techTitle">技術分析</h3>
+            <div class="techStatus" id="techStatus">點選股票後載入 Yahoo Finance 資料</div>
+          </div>
+          <div class="pill" id="techTicker"></div>
+        </div>
+        <div class="techMetrics" id="techMetrics"></div>
+        <div class="chartGrid">
+          <div class="chartBox">
+            <h4>近 6 個月股價＋MA5 / MA10 / MA20 / MA60</h4>
+            <div class="interactiveChartWrap" id="interactiveChartWrap">
+            <canvas id="priceCanvas" class="chartCanvas" width="1200" height="360" tabindex="0" aria-label="可互動技術分析線圖"></canvas>
+            <div class="chartTooltip" id="chartTooltip" aria-live="polite"></div>
+          </div>
+            <div class="legend">Yahoo Finance 日線資料｜收盤價與移動平均線</div><div class="chartHint">滑鼠移動或手指點擊線圖，可查看個別交易日價格與均線數值。</div>
+          </div>
+          <div class="chartBox">
+            <h4>成交量</h4>
+            <div class="interactiveChartWrap" id="interactiveVolumeWrap">
+            <canvas id="volumeCanvas" class="volumeCanvas" width="1200" height="130" tabindex="0" aria-label="可互動成交量圖"></canvas>
+            <div class="chartTooltip" id="volumeTooltip" aria-live="polite"></div>
+          </div>
+          </div>
+        </div>
+        <button class="yahooLink" id="retryTech" type="button" style="cursor:pointer">重新載入技術圖表</button>
+        <a id="yahooLink" class="yahooLink" target="_blank" rel="noopener">在 Yahoo 股市開啟完整技術分析 ↗</a>
+      </section>
+
+      <section class="panel tableWrap">
+        <table>
+          <thead>
+            <tr>
+              <th>代號</th><th>股票名稱</th><th>市場</th><th>官方產業</th><th>題材標籤</th><th>財報</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </section>
+
+      <div class="note">
+        <b>分類邏輯：</b>「官方產業」用證交所／櫃買中心公司基本資料；「題材族群」屬投資研究分類，
+        一家公司可同時具有多個標籤，例如台積電可同時屬於半導體、晶圓代工、AI、先進封裝。
+        題材分類不是官方認定，會隨產品、客戶與市場主題變動。
+      </div>
+      <div class="footer">資料介面：TWSE OpenAPI / TPEx OpenAPI。此頁不構成投資建議。</div>
+    </main>
+  </div>
+</div>
+
+<script>
+const themeMap = {
+  "半導體": ["2330","2303","6770","5347","2454","2379","3034","3443","3035","3661","3529","6643","6533","3711","6239","2449","6257","8150","6147","3131","3583","6187","5443","6640","6223","6510","3680","1560","6488","3532","4966","5269","5274","6415","6531","6532","6534","6538","6552","6588","6643","6756","6789","6799","8028","8081","8299"],
+  "記憶體": ["2337","2344","2408","3006","3260","2451","8271","4973","8088","8299","5351","6531","4967","5289","8271","2451","8112","3131"],
+  "矽光子 / CPO": ["3363","6442","3450","4979","3081","4908","3163","4991","4971","3711","2330","6223","4977","3234","6285","3491"],
+  "AI 伺服器": ["2382","3231","6669","2356","2376","2377","3017","3324","3653","6414","2301","2317","2308","3037","8046","8210","2383","3013","6274","2421","6282"],
+  "機器人": ["2359","2049","1590","4540","4576","8374","6691","6188","3167","4583","4566","2464","6605","1536","2233","6215","6125","2395"],
+  "PCB / CCL": ["3037","8046","2383","2368","2313","4958","5469","6274","6213","8358","5340","6191","4927","6251","2367","3189","8213","2355"],
+  "散熱": ["3017","3324","3653","6230","2421","3338","8996","3483","6115","6591"],
+  "重電 / 電網": ["1513","1519","1503","1609","1612","1608","1618","1514","1517","6806","4588","6873"],
+  "低軌衛星": ["3491","6285","2314","5388","4906","4977","3596","6546","8089","6284","2439"],
+  "生技醫療": ["6446","1795","4162","4743","6472","6589","6617","6919","6547","4174","4147","4105","4128","4167","4190","6461","6491","6535","6550"]
+};
+
+const subTags = {
+ "2330":["晶圓代工","先進製程","CoWoS","AI"],
+ "2303":["晶圓代工","成熟製程"],
+ "6770":["晶圓代工","成熟製程"],
+ "5347":["晶圓代工"],
+ "2454":["IC設計","AI ASIC","手機晶片"],
+ "3443":["ASIC","IC設計"],
+ "3661":["ASIC","IC設計"],
+ "3529":["IP","矽智財"],
+ "6643":["IP","矽智財"],
+ "6533":["RISC-V","IP"],
+ "2344":["DRAM","NOR Flash"],
+ "2408":["DRAM"],
+ "2337":["NOR Flash"],
+ "8299":["NAND","控制IC","SSD"],
+ "3260":["記憶體模組","SSD"],
+ "2451":["記憶體模組"],
+ "8271":["記憶體模組"],
+ "3363":["CPO","光通訊"],
+ "6442":["光通訊","CPO"],
+ "3450":["光通訊","雷射"],
+ "4979":["光通訊","CPO"],
+ "3081":["光通訊","CPO"],
+ "3163":["磊晶","光通訊"],
+ "4991":["磊晶","光通訊"],
+ "2382":["AI伺服器","ODM"],
+ "3231":["AI伺服器","ODM"],
+ "6669":["AI伺服器","伺服器"],
+ "3017":["散熱","AI伺服器"],
+ "3324":["散熱","AI伺服器"],
+ "3653":["散熱","AI伺服器"],
+ "2359":["機器人","機器視覺"],
+ "2049":["線性滑軌","機器人"],
+ "1590":["線性滑軌","自動化"],
+ "4540":["機器人","減速機"],
+ "1513":["重電","變壓器"],
+ "1519":["重電","變壓器"],
+ "1503":["重電","電網"],
+ "3491":["低軌衛星","微波通訊"],
+ "6285":["低軌衛星","網通"],
+ "6919":["新藥","減重題材"],
+ "6274":["CCL","銅箔基板","AI伺服器"],
+ "6213":["CCL","銅箔基板","PCB材料"],
+ "2368":["PCB","AI伺服器","伺服器板"],
+ "4958":["PCB","HDI","Apple供應鏈"],
+ "2313":["PCB","HDI","伺服器"],
+ "2355":["PCB","車用PCB"],
+ "8358":["PCB材料","銅箔"],
+ "3037":["PCB","IC載板","AI伺服器"],
+ "3189":["PCB","IC載板","ABF載板"],
+ "8046":["PCB","IC載板","ABF載板"],
+ "2383":["CCL","高階銅箔基板","AI伺服器"]
+};
+
+let stocks = [];
+let active = {type:"all", value:"ALL"};
+
+const fallback = [
+ ["2330","台積電","L","半導體業"],["2303","聯電","L","半導體業"],["2454","聯發科","L","半導體業"],
+ ["2344","華邦電","L","半導體業"],["2408","南亞科","L","半導體業"],["2337","旺宏","L","半導體業"],
+ ["3443","創意","L","半導體業"],["3661","世芯-KY","L","半導體業"],["3711","日月光投控","L","半導體業"],
+ ["2382","廣達","L","電腦及週邊設備業"],["3231","緯創","L","電腦及週邊設備業"],["6669","緯穎","L","電腦及週邊設備業"],
+ ["2359","所羅門","L","其他電子業"],["3017","奇鋐","L","電腦及週邊設備業"],["3324","雙鴻","O","其他電子業"],["6274","台燿","O","電子零組件業"],["6213","聯茂","L","電子零組件業"],["2383","台光電","L","電子零組件業"],
+ ["3363","上詮","O","通信網路業"],["6442","光聖","O","通信網路業"],["3450","聯鈞","L","其他電子業"],
+ ["4979","華星光","O","通信網路業"],["3081","聯亞","O","通信網路業"],["8299","群聯","O","半導體業"],
+ ["3260","威剛","O","半導體業"],["8271","宇瞻","O","半導體業"],["5351","鈺創","O","半導體業"],
+ ["1513","中興電","L","電機機械"],["1519","華城","L","電機機械"],["3491","昇達科","O","通信網路業"],
+ ["6919","康霈*","L","生技醫療業"]
+,["8046","南電","L","電子零組件業"],["3189","景碩","L","電子零組件業"],["3037","欣興","L","電子零組件業"],["8358","金居","O","電子零組件業"],["2355","敬鵬","L","電子零組件業"],["2313","華通","L","電子零組件業"],["4958","臻鼎-KY","L","電子零組件業"],["2368","金像電","L","電子零組件業"]].map(x=>({code:x[0],name:x[1],market:x[2],industry:x[3]}));
+
+function normalizeRows(rows, market){
+  return rows.map(r=>{
+    const code = String(r["公司代號"] ?? r["SecuritiesCompanyCode"] ?? r["公司代碼"] ?? r["代號"] ?? "").trim();
+    const name = String(r["公司簡稱"] ?? r["公司名稱"] ?? r["CompanyName"] ?? r["名稱"] ?? "").trim();
+    const industry = String(r["產業別"] ?? r["Industry"] ?? "未分類").trim();
+    return {code,name,market,industry};
+  }).filter(x=>/^\d{4,6}$/.test(x.code) && x.name);
+}
+async function fetchJson(url){
+  const r = await fetch(url,{cache:"no-store"});
+  if(!r.ok) throw new Error(r.status);
+  return await r.json();
+}
+async function loadOfficial(){
+  const status=document.getElementById("status");
+  let got=[];
+  try{
+    const tw = await fetchJson("https://openapi.twse.com.tw/v1/opendata/t187ap03_L");
+    got.push(...normalizeRows(tw,"L"));
+  }catch(e){ console.warn("TWSE API",e); }
+  try{
+    const ot = await fetchJson("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O");
+    got.push(...normalizeRows(ot,"O"));
+  }catch(e){ console.warn("TPEx API",e); }
+
+  const uniq = new Map();
+  [...got,...fallback].forEach(s=>{ if(!uniq.has(s.code)) uniq.set(s.code,s); });
+  stocks=[...uniq.values()];
+  if(got.length>100){
+    status.textContent=`官方資料已載入｜${stocks.length} 檔`;
+  }else{
+    status.textContent=`官方 API 未完整載入｜目前顯示內建資料 ${stocks.length} 檔`;
+  }
+  buildIndustryButtons();
+  buildThemeButtons();
+  selectAll();
+}
+function tagsFor(code){
+  const tags=[];
+  Object.entries(themeMap).forEach(([theme,codes])=>{ if(codes.includes(code)) tags.push(theme); });
+  (subTags[code]||[]).forEach(t=>tags.push(t));
+  return [...new Set(tags)];
+}
+function buildThemeButtons(){
+  const el=document.getElementById("themeBtns");
+  el.innerHTML="";
+  Object.keys(themeMap).forEach(theme=>{
+    const count=stocks.filter(s=>themeMap[theme].includes(s.code)).length;
+    const b=document.createElement("button");
+    b.type="button";
+    b.className="btn";
+    b.dataset.theme=theme;
+    b.innerHTML=`<span>${theme}</span><span class="count">${count}</span>`;
+    b.addEventListener("click",()=>{
+      selectTheme(theme);
+      window.scrollTo({top:0,behavior:"smooth"});
+    });
+    el.appendChild(b);
+  });
+}
+function buildIndustryButtons(){
+  const el=document.getElementById("industryBtns");
+  el.innerHTML=`<button class="btn" onclick="selectAll()"><span>全部上市櫃</span><span class="count" id="allCount">${stocks.length}</span></button>`;
+  const groups={};
+  stocks.forEach(s=>groups[s.industry]=(groups[s.industry]||0)+1);
+  Object.entries(groups).sort((a,b)=>b[1]-a[1]).forEach(([ind,n])=>{
+    const b=document.createElement("button");
+    b.className="btn"; b.dataset.industry=ind;
+    b.innerHTML=`<span>${ind}</span><span class="count">${n}</span>`;
+    b.onclick=()=>selectIndustry(ind);
+    el.appendChild(b);
+  });
+}
+function clearActive(){
+  document.querySelectorAll(".btn").forEach(b=>b.classList.remove("active"));
+}
+function selectAll(){
+  active={type:"all",value:"ALL"}; clearActive();
+  document.querySelector('#industryBtns .btn')?.classList.add("active");
+  document.getElementById("title").textContent="全部上市櫃股票";
+  document.getElementById("desc").textContent="依官方公司基本資料建立完整市場清單，可再用市場與搜尋條件篩選。";
+  renderTable();
+}
+function selectTheme(theme){
+  active={type:"theme",value:theme};
+  clearActive();
+  document.querySelectorAll("#themeBtns .btn").forEach(b=>{
+    if(b.dataset.theme===theme) b.classList.add("active");
+  });
+  document.getElementById("title").textContent=theme;
+  document.getElementById("desc").textContent = theme==="PCB / CCL"
+    ? "PCB / CCL 族群已加入：6274、2383、6213、8046、3189、3037、8358、2355、2313、4958、2368 等相關標的。"
+    : "投資題材分類：可跨越多個官方產業，同一股票可同時屬於多個題材。";
+  document.getElementById("search").value="";
+  closeResult();
+  const tech=document.getElementById("techPanel");
+  if(tech) tech.classList.remove("show");
+  renderTable();
+}
+function selectIndustry(ind){
+  active={type:"industry",value:ind}; clearActive();
+  document.querySelector(`[data-industry="${CSS.escape(ind)}"]`)?.classList.add("active");
+  document.getElementById("title").textContent=ind;
+  document.getElementById("desc").textContent="官方公司產業分類。";
+  renderTable();
+}
+function normalizeText(v){
+  return String(v ?? "")
+    .toLowerCase()
+    .replace(/\s+/g,"")
+    .replace(/[／/]/g,"/")
+    .replace(/－/g,"-");
+}
+function getFiltered(){
+  const raw=document.getElementById("search").value.trim();
+  const q=normalizeText(raw);
+  const market=document.getElementById("marketFilter").value;
+  let arr=stocks.filter(s=>{
+    if(market!=="ALL" && s.market!==market) return false;
+    if(active.type==="theme" && !themeMap[active.value].includes(s.code)) return false;
+    if(active.type==="industry" && s.industry!==active.value) return false;
+    const tags=tagsFor(s.code).join(" ");
+    const hay=normalizeText(`${s.code} ${s.name} ${s.industry} ${tags}`);
+    if(q && !hay.includes(q)) return false;
+    return true;
+  });
+  const sort=document.getElementById("sort").value;
+  arr.sort((a,b)=>{
+    if(sort==="name") return a.name.localeCompare(b.name,"zh-Hant");
+    if(sort==="industry") return a.industry.localeCompare(b.industry,"zh-Hant") || a.code.localeCompare(b.code);
+    return a.code.localeCompare(b.code);
+  });
+  return arr;
+}
+
+
+function closeResult(){
+  document.getElementById("resultCard").classList.remove("show");
+}
+function showStockResult(stock){
+  const card=document.getElementById("resultCard");
+  document.getElementById("resultTitle").textContent=stock.name;
+  document.getElementById("resultCode").textContent=`股票代號：${stock.code}`;
+  document.getElementById("resultMarket").textContent=stock.market==="L"?"上市":"上櫃";
+  document.getElementById("resultInfo").innerHTML=`
+    <div class="infoBox"><span>股票代號</span><b>${stock.code}</b></div>
+    <div class="infoBox"><span>公司名稱</span><b>${stock.name}</b></div>
+    <div class="infoBox"><span>市場</span><b>${stock.market==="L"?"上市":"上櫃"}</b></div>
+    <div class="infoBox"><span>官方產業</span><b>${stock.industry||"未分類"}</b></div>`;
+  const tags=tagsFor(stock.code);
+  document.getElementById("resultTags").innerHTML=tags.length
+    ? tags.map(t=>`<span class="tag">${t}</span>`).join("")
+    : `<span class="muted">目前沒有額外題材標籤</span>`;
+  card.classList.add("show");
+  const btn=document.getElementById("loadTechBtn");
+  if(btn) btn.onclick=()=>loadYahooTechnical(stock);
+  card.scrollIntoView({behavior:"smooth",block:"start"});
+}
+function showGroupResult(query, arr){
+  const card=document.getElementById("resultCard");
+  document.getElementById("resultTitle").textContent=`${query}｜族群搜尋結果`;
+  document.getElementById("resultCode").textContent=`共找到 ${arr.length} 檔股票`;
+  document.getElementById("resultMarket").textContent="族群";
+  const l=arr.filter(x=>x.market==="L").length;
+  const o=arr.filter(x=>x.market==="O").length;
+  const industries=[...new Set(arr.map(x=>x.industry).filter(Boolean))];
+  document.getElementById("resultInfo").innerHTML=`
+    <div class="infoBox"><span>符合股票</span><b>${arr.length} 檔</b></div>
+    <div class="infoBox"><span>上市</span><b>${l} 檔</b></div>
+    <div class="infoBox"><span>上櫃</span><b>${o} 檔</b></div>
+    <div class="infoBox"><span>涵蓋產業</span><b>${industries.length} 類</b></div>`;
+  document.getElementById("resultTags").innerHTML=arr.slice(0,20)
+    .map(s=>`<span class="tag">${s.code} ${s.name}</span>`).join("");
+  card.classList.add("show");
+  const btn=document.getElementById("loadTechBtn");
+  if(btn) btn.onclick=()=>loadYahooTechnical(stock);
+  card.scrollIntoView({behavior:"smooth",block:"start"});
+}
+function performSearch(){
+  const raw=document.getElementById("search").value.trim();
+  renderTable();
+  if(!raw){
+    closeResult();
+    return;
+  }
+  const q=normalizeText(raw);
+  const exact=stocks.find(s=>normalizeText(s.code)===q || normalizeText(s.name)===q);
+  if(exact){
+    showStockResult(exact);
+    loadYahooTechnical(exact);
+    return;
+  }
+  const arr=getFiltered();
+  if(arr.length===1){
+    showStockResult(arr[0]);
+    loadYahooTechnical(arr[0]);
+  }else{
+    showGroupResult(raw,arr);
+  }
+}
+
+
+function yahooTickerFor(stock){
+  return stock.code + (stock.market==="O" ? ".TWO" : ".TW");
+}
+function sma(values, period){
+  const out=new Array(values.length).fill(null);
+  let sum=0, count=0;
+  for(let i=0;i<values.length;i++){
+    const v=values[i];
+    if(v!=null && Number.isFinite(v)){ sum+=v; count++; }
+    if(i>=period){
+      const old=values[i-period];
+      if(old!=null && Number.isFinite(old)){ sum-=old; count--; }
+    }
+    if(i>=period-1 && count===period) out[i]=sum/period;
+  }
+  return out;
+}
+function fmtNum(v, digits=2){
+  if(v==null || !Number.isFinite(v)) return "—";
+  return Number(v).toLocaleString("zh-TW",{maximumFractionDigits:digits});
+}
+function fmtPct(v){
+  if(v==null || !Number.isFinite(v)) return "—";
+  const sign=v>0?"+":"";
+  return sign+v.toFixed(2)+"%";
+}
+function resizeCanvasToCss(canvas){
+  const rect=canvas.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  const w=Math.max(600,Math.floor(rect.width*dpr));
+  const h=Math.max(180,Math.floor(rect.height*dpr));
+  if(canvas.width!==w || canvas.height!==h){canvas.width=w;canvas.height=h;}
+  return {w,h,dpr};
+}
+let techChartState=null;
+
+function drawTechnicalChart(dates, closes, ma5, ma10, ma20, ma60, selectedIndex=null){
+  const c=document.getElementById("priceCanvas"), ctx=c.getContext("2d");
+  const {w,h,dpr}=resizeCanvasToCss(c);
+  ctx.clearRect(0,0,w,h);
+  const pad={l:58*dpr,r:16*dpr,t:18*dpr,b:32*dpr};
+  const vals=[...closes,...ma5,...ma10,...ma20,...ma60].filter(v=>v!=null&&Number.isFinite(v));
+  if(!vals.length) return;
+  let min=Math.min(...vals), max=Math.max(...vals);
+  const ext=(max-min||1)*0.08; min-=ext; max+=ext;
+  const x=i=>pad.l+(w-pad.l-pad.r)*(i/(Math.max(1,dates.length-1)));
+  const y=v=>pad.t+(h-pad.t-pad.b)*(1-(v-min)/(max-min));
+
+  techChartState={dates,closes,ma5,ma10,ma20,ma60,w,h,dpr,pad,min,max,x,y,selectedIndex};
+
+  ctx.strokeStyle="#d7c8b1"; ctx.lineWidth=1*dpr;
+  ctx.fillStyle="#000"; ctx.font=`${11*dpr}px "DFKai-SB","標楷體",serif`;
+  for(let i=0;i<5;i++){
+    const yy=pad.t+(h-pad.t-pad.b)*i/4;
+    ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(w-pad.r,yy);ctx.stroke();
+    const val=max-(max-min)*i/4;
+    ctx.fillText(fmtNum(val,1),4*dpr,yy+4*dpr);
+  }
+
+  const lines=[
+    [closes,"#2f2f2f",2.3],
+    [ma5,"#a66f00",1.5],
+    [ma10,"#a14959",1.5],
+    [ma20,"#4378a8",1.5],
+    [ma60,"#4f825d",1.5],
+  ];
+  for(const [arr,color,lw] of lines){
+    ctx.strokeStyle=color;ctx.lineWidth=lw*dpr;ctx.beginPath();
+    let started=false;
+    arr.forEach((v,i)=>{
+      if(v==null||!Number.isFinite(v)) return;
+      const xx=x(i), yy=y(v);
+      if(!started){ctx.moveTo(xx,yy);started=true;} else ctx.lineTo(xx,yy);
+    });
+    ctx.stroke();
+  }
+
+  const tickCount=6;
+  ctx.fillStyle="#000";
+  for(let j=0;j<tickCount;j++){
+    const i=Math.round((dates.length-1)*j/(tickCount-1));
+    const dt=new Date(dates[i]*1000);
+    const label=`${dt.getMonth()+1}/${dt.getDate()}`;
+    const xx=x(i);
+    ctx.fillText(label,Math.max(pad.l,xx-15*dpr),h-8*dpr);
+  }
+
+  const legend=[["收盤","#2f2f2f"],["MA5","#a66f00"],["MA10","#a14959"],["MA20","#4378a8"],["MA60","#4f825d"]];
+  let lx=pad.l;
+  legend.forEach(([name,color])=>{
+    ctx.fillStyle=color;ctx.fillRect(lx,pad.t,14*dpr,3*dpr);
+    ctx.fillStyle="#000";ctx.fillText(name,lx+19*dpr,pad.t+5*dpr);
+    lx+=74*dpr;
+  });
+
+  if(selectedIndex!=null && selectedIndex>=0 && selectedIndex<dates.length){
+    const xx=x(selectedIndex);
+    ctx.save();
+    ctx.strokeStyle="#8f6f4f";
+    ctx.lineWidth=1.25*dpr;
+    ctx.setLineDash([4*dpr,4*dpr]);
+    ctx.beginPath();ctx.moveTo(xx,pad.t);ctx.lineTo(xx,h-pad.b);ctx.stroke();
+    ctx.setLineDash([]);
+
+    const cv=closes[selectedIndex];
+    if(cv!=null&&Number.isFinite(cv)){
+      const yy=y(cv);
+      ctx.fillStyle="#8f6f4f";
+      ctx.beginPath();ctx.arc(xx,yy,4.2*dpr,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle="#fffaf0";ctx.lineWidth=2*dpr;ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function showChartTooltip(index, clientX=null, clientY=null){
+  const st=techChartState;
+  const tip=document.getElementById("chartTooltip");
+  const wrap=document.getElementById("interactiveChartWrap");
+  if(!st||!tip||!wrap||index<0||index>=st.dates.length) return;
+  const dt=new Date(st.dates[index]*1000);
+  const dateLabel=`${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,"0")}/${String(dt.getDate()).padStart(2,"0")}`;
+  const volumeValue=techVolumeState?.volumes?.[index];
+  tip.innerHTML=`<b>${dateLabel}</b><br>
+    收盤：${fmtNum(st.closes[index],2)}<br>
+    MA5：${fmtNum(st.ma5[index],2)}　MA10：${fmtNum(st.ma10[index],2)}<br>
+    MA20：${fmtNum(st.ma20[index],2)}　MA60：${fmtNum(st.ma60[index],2)}<br>
+    成交量：${fmtNum(volumeValue,0)}`;
+  tip.classList.add("show");
+
+  const rect=wrap.getBoundingClientRect();
+  let left, top;
+  if(clientX!=null && clientY!=null){
+    left=clientX-rect.left+12;
+    top=clientY-rect.top+12;
+  }else{
+    left=(st.x(index)/st.dpr)+10;
+    top=18;
+  }
+  const maxLeft=Math.max(4,rect.width-205);
+  left=Math.max(4,Math.min(left,maxLeft));
+  top=Math.max(4,Math.min(top,rect.height-110));
+  tip.style.left=left+"px";
+  tip.style.top=top+"px";
+}
+
+function chartIndexFromPointer(e){
+  const st=techChartState;
+  const c=document.getElementById("priceCanvas");
+  if(!st||!c) return null;
+  const rect=c.getBoundingClientRect();
+  const cssX=e.clientX-rect.left;
+  const scaleX=st.w/rect.width;
+  const px=cssX*scaleX;
+  const usable=st.w-st.pad.l-st.pad.r;
+  const t=(px-st.pad.l)/usable;
+  const idx=Math.round(Math.max(0,Math.min(1,t))*(st.dates.length-1));
+  return idx;
+}
+
+function selectChartIndex(idx, e=null){
+  synchronizedSelect(idx,e,"price");
+}
+
+function initInteractiveTechnicalChart(){
+  const c=document.getElementById("priceCanvas");
+  const tip=document.getElementById("chartTooltip");
+  if(!c || c.dataset.interactiveReady==="1") return;
+  c.dataset.interactiveReady="1";
+
+  c.addEventListener("pointermove",e=>{
+    if(e.pointerType==="mouse"){
+      const idx=chartIndexFromPointer(e);
+      selectChartIndex(idx,e);
+    }
+  });
+  c.addEventListener("pointerdown",e=>{
+    const idx=chartIndexFromPointer(e);
+    selectChartIndex(idx,e);
+  });
+  c.addEventListener("pointerleave",()=>{
+    if(techChartState?.selectedIndex==null && tip) tip.classList.remove("show");
+  });
+  c.addEventListener("keydown",e=>{
+    if(!techChartState) return;
+    let idx=techChartState.selectedIndex;
+    if(idx==null) idx=techChartState.dates.length-1;
+    if(e.key==="ArrowLeft"){e.preventDefault();idx=Math.max(0,idx-1);selectChartIndex(idx);}
+    if(e.key==="ArrowRight"){e.preventDefault();idx=Math.min(techChartState.dates.length-1,idx+1);selectChartIndex(idx);}
+    if(e.key==="Escape"){if(tip)tip.classList.remove("show");}
+  });
+}
+
+function drawVolumeChart(volumes, selectedIndex=null){
+  const c=document.getElementById("volumeCanvas"), ctx=c.getContext("2d");
+  const {w,h,dpr}=resizeCanvasToCss(c);
+  ctx.clearRect(0,0,w,h);
+  const pad={l:58*dpr,r:16*dpr,t:12*dpr,b:18*dpr};
+  const max=Math.max(...volumes.filter(v=>v!=null&&Number.isFinite(v)),1);
+  const bw=Math.max(1,(w-pad.l-pad.r)/Math.max(1,volumes.length)*0.68);
+  ctx.strokeStyle="#d7c8b1";
+  ctx.beginPath();ctx.moveTo(pad.l,h-pad.b);ctx.lineTo(w-pad.r,h-pad.b);ctx.stroke();
+
+  volumes.forEach((v,i)=>{
+    if(v==null||!Number.isFinite(v)) return;
+    const x=pad.l+(w-pad.l-pad.r)*i/Math.max(1,volumes.length-1);
+    const bh=(h-pad.t-pad.b)*(v/max);
+    ctx.fillStyle="#9f8265";
+    ctx.fillRect(x-bw/2,h-pad.b-bh,bw,bh);
+  });
+
+  if(selectedIndex!=null && selectedIndex>=0 && selectedIndex<volumes.length){
+    const xx=pad.l+(w-pad.l-pad.r)*selectedIndex/Math.max(1,volumes.length-1);
+    ctx.save();
+    ctx.strokeStyle="#8f6f4f";
+    ctx.lineWidth=1.25*dpr;
+    ctx.setLineDash([4*dpr,4*dpr]);
+    ctx.beginPath();ctx.moveTo(xx,pad.t);ctx.lineTo(xx,h-pad.b);ctx.stroke();
+    ctx.setLineDash([]);
+
+    const v=volumes[selectedIndex];
+    if(v!=null&&Number.isFinite(v)){
+      const bh=(h-pad.t-pad.b)*(v/max);
+      const yy=h-pad.b-bh;
+      ctx.fillStyle="#8f6f4f";
+      ctx.beginPath();ctx.arc(xx,yy,3.8*dpr,0,Math.PI*2);ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  ctx.fillStyle="#000";ctx.font=`${11*dpr}px "DFKai-SB","標楷體",serif`;
+  ctx.fillText("最大量 "+fmtNum(max/1000,0)+"K",4*dpr,18*dpr);
+  techVolumeState={volumes,w,h,dpr,pad,max,selectedIndex};
+}
+
+let techVolumeState=null;
+
+function showVolumeTooltip(index, clientX=null, clientY=null){
+  const tip=document.getElementById("volumeTooltip");
+  const wrap=document.getElementById("interactiveVolumeWrap");
+  const st=techChartState;
+  const vst=techVolumeState;
+  if(!tip||!wrap||!st||!vst||index<0||index>=vst.volumes.length) return;
+
+  const dt=new Date(st.dates[index]*1000);
+  const dateLabel=`${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,"0")}/${String(dt.getDate()).padStart(2,"0")}`;
+  const vol=vst.volumes[index];
+  tip.innerHTML=`<b>${dateLabel}</b><br>成交量：${fmtNum(vol,0)}`;
+  tip.classList.add("show");
+
+  const rect=wrap.getBoundingClientRect();
+  let left, top;
+  if(clientX!=null && clientY!=null){
+    left=clientX-rect.left+12;
+    top=clientY-rect.top+12;
+  }else{
+    const x=vst.pad.l+(vst.w-vst.pad.l-vst.pad.r)*index/Math.max(1,vst.volumes.length-1);
+    left=x/vst.dpr+10;
+    top=8;
+  }
+  left=Math.max(4,Math.min(left,Math.max(4,rect.width-190)));
+  top=Math.max(4,Math.min(top,Math.max(4,rect.height-78)));
+  tip.style.left=left+"px";
+  tip.style.top=top+"px";
+}
+
+function synchronizedSelect(idx, e=null, source="price"){
+  if(!techChartState || idx==null) return;
+
+  drawTechnicalChart(
+    techChartState.dates,
+    techChartState.closes,
+    techChartState.ma5,
+    techChartState.ma10,
+    techChartState.ma20,
+    techChartState.ma60,
+    idx
+  );
+
+  if(techVolumeState){
+    drawVolumeChart(techVolumeState.volumes,idx);
+  }
+
+  showChartTooltip(idx, source==="price" ? (e?.clientX??null) : null, source==="price" ? (e?.clientY??null) : null);
+  showVolumeTooltip(idx, source==="volume" ? (e?.clientX??null) : null, source==="volume" ? (e?.clientY??null) : null);
+}
+
+function volumeIndexFromPointer(e){
+  const st=techVolumeState;
+  const c=document.getElementById("volumeCanvas");
+  if(!st||!c) return null;
+  const rect=c.getBoundingClientRect();
+  const cssX=e.clientX-rect.left;
+  const scaleX=st.w/rect.width;
+  const px=cssX*scaleX;
+  const usable=st.w-st.pad.l-st.pad.r;
+  const t=(px-st.pad.l)/usable;
+  return Math.round(Math.max(0,Math.min(1,t))*(st.volumes.length-1));
+}
+
+function initInteractiveVolumeChart(){
+  const c=document.getElementById("volumeCanvas");
+  if(!c || c.dataset.interactiveReady==="1") return;
+  c.dataset.interactiveReady="1";
+
+  c.addEventListener("pointermove",e=>{
+    if(e.pointerType==="mouse"){
+      const idx=volumeIndexFromPointer(e);
+      synchronizedSelect(idx,e,"volume");
+    }
+  });
+  c.addEventListener("pointerdown",e=>{
+    const idx=volumeIndexFromPointer(e);
+    synchronizedSelect(idx,e,"volume");
+  });
+  c.addEventListener("keydown",e=>{
+    if(!techChartState||!techVolumeState) return;
+    let idx=techChartState.selectedIndex;
+    if(idx==null) idx=techChartState.dates.length-1;
+    if(e.key==="ArrowLeft"){e.preventDefault();idx=Math.max(0,idx-1);synchronizedSelect(idx,null,"volume");}
+    if(e.key==="ArrowRight"){e.preventDefault();idx=Math.min(techChartState.dates.length-1,idx+1);synchronizedSelect(idx,null,"volume");}
+  });
+}
+
+async function loadYahooTechnical(stock){
+  const panel=document.getElementById("techPanel");
+  panel.classList.add("show");
+  const ticker=yahooTickerFor(stock);
+  document.getElementById("techTitle").textContent=`${stock.name}｜技術分析`;
+  document.getElementById("techTicker").textContent=ticker;
+  document.getElementById("techStatus").textContent="正在載入歷史行情…";
+  document.getElementById("yahooLink").href=`https://tw.stock.yahoo.com/quote/${stock.code}.TW/technical-analysis`;
+  const retry=document.getElementById("retryTech");
+  if(retry) retry.onclick=()=>loadYahooTechnical(stock);
+
+  async function fetchYahoo(){
+    const yahooUrl=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=6mo&interval=1d&includePrePost=false&events=div%2Csplits`;
+    const attempts=[
+      yahooUrl,
+      `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`
+    ];
+    let lastErr=null;
+    for(const u of attempts){
+      try{
+        const r=await fetch(u,{cache:"no-store"});
+        if(!r.ok) throw new Error("HTTP "+r.status);
+        const j=await r.json();
+        const res=j?.chart?.result?.[0];
+        if(!res) throw new Error("Yahoo 無有效資料");
+        const q=res.indicators?.quote?.[0]||{};
+        return {
+          source:"Yahoo Finance",
+          timestamps:res.timestamp||[],
+          open:q.open||[], high:q.high||[], low:q.low||[],
+          close:q.close||[], volume:q.volume||[],
+          meta:res.meta||{}
+        };
+      }catch(e){ lastErr=e; }
+    }
+    throw lastErr||new Error("Yahoo 載入失敗");
+  }
+
+  async function fetchFinMind(){
+    const endDate=new Date();
+    const startDate=new Date();
+    startDate.setMonth(startDate.getMonth()-7);
+    const ds=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    const url=`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${encodeURIComponent(stock.code)}&start_date=${ds(startDate)}&end_date=${ds(endDate)}`;
+    const r=await fetch(url,{cache:"no-store"});
+    if(!r.ok) throw new Error("FinMind HTTP "+r.status);
+    const j=await r.json();
+    const rows=(j.data||[]).filter(x=>x.close!=null);
+    if(!rows.length) throw new Error("FinMind 無資料");
+    return {
+      source:"台股交易所資料備援",
+      timestamps:rows.map(x=>Math.floor(new Date(x.date+"T00:00:00+08:00").getTime()/1000)),
+      open:rows.map(x=>Number(x.open)),
+      high:rows.map(x=>Number(x.max)),
+      low:rows.map(x=>Number(x.min)),
+      close:rows.map(x=>Number(x.close)),
+      volume:rows.map(x=>Number(x.Trading_Volume)),
+      meta:{}
+    };
+  }
+
+  try{
+    let data;
+    try{
+      data=await fetchYahoo();
+    }catch(yahooErr){
+      console.warn("Yahoo blocked, switching to exchange-backed fallback",yahooErr);
+      document.getElementById("techStatus").textContent="Yahoo 被瀏覽器阻擋，正在切換台股交易所資料備援…";
+      data=await fetchFinMind();
+    }
+
+    const ts=data.timestamps, closes=data.close, opens=data.open, highs=data.high, lows=data.low, volumes=data.volume;
+    const ma5=sma(closes,5), ma10=sma(closes,10), ma20=sma(closes,20), ma60=sma(closes,60);
+    const valid=closes.map((v,i)=>(v!=null&&Number.isFinite(v))?i:null).filter(i=>i!=null);
+    const last=valid[valid.length-1], prev=valid[valid.length-2];
+    const chg=(last!=null&&prev!=null)?((closes[last]-closes[prev])/closes[prev]*100):null;
+    const latestClose=last!=null?closes[last]:null;
+
+    document.getElementById("techMetrics").innerHTML=`
+      <div class="techMetric"><span>最新收盤</span><b>${fmtNum(latestClose,2)}</b></div>
+      <div class="techMetric"><span>單日漲跌</span><b>${fmtPct(chg)}</b></div>
+      <div class="techMetric"><span>開盤</span><b>${fmtNum(opens[last],2)}</b></div>
+      <div class="techMetric"><span>最高</span><b>${fmtNum(highs[last],2)}</b></div>
+      <div class="techMetric"><span>最低</span><b>${fmtNum(lows[last],2)}</b></div>
+      <div class="techMetric"><span>成交量</span><b>${fmtNum(volumes[last],0)}</b></div>
+      <div class="techMetric"><span>MA5</span><b>${fmtNum(ma5[last],2)}</b></div>
+      <div class="techMetric"><span>MA10</span><b>${fmtNum(ma10[last],2)}</b></div>
+      <div class="techMetric"><span>MA20</span><b>${fmtNum(ma20[last],2)}</b></div>
+      <div class="techMetric"><span>MA60</span><b>${fmtNum(ma60[last],2)}</b></div>
+      <div class="techMetric"><span>資料來源</span><b>${data.source}</b></div>
+      <div class="techMetric"><span>筆數</span><b>${valid.length} 日</b></div>`;
+
+    document.getElementById("techStatus").textContent=
+      data.source==="Yahoo Finance"
+      ? "Yahoo Finance 歷史日線已載入｜近 6 個月"
+      : "Yahoo 受到瀏覽器限制，已自動改用台股交易所歷史行情繪圖";
+
+    // Give layout one frame to become visible before measuring canvases.
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      drawTechnicalChart(ts,closes,ma5,ma10,ma20,ma60,null);
+      initInteractiveTechnicalChart();
+      drawVolumeChart(volumes,null);
+      initInteractiveVolumeChart();
+    }));
+    panel.scrollIntoView({behavior:"smooth",block:"start"});
+  }catch(err){
+    console.error(err);
+    document.getElementById("techStatus").textContent="歷史行情載入失敗。請確認網路連線後按「重新載入技術圖表」。";
+    document.getElementById("techMetrics").innerHTML=`
+      <div class="techMetric"><span>股票</span><b>${stock.code} ${stock.name}</b></div>
+      <div class="techMetric"><span>Yahoo</span><b>瀏覽器連線受限</b></div>
+      <div class="techMetric"><span>備援資料</span><b>目前也無法連線</b></div>`;
+  }
+}
+
+function openFinancial(code,market){
+  const suffix = market==="O" ? ".TWO" : ".TW";
+  const ticker = code + suffix;
+  const url = `https://tw.stock.yahoo.com/quote/${ticker}/financials`;
+  window.open(url,"_blank","noopener");
+}
+
+function openStockDetail(code){
+  const stock=stocks.find(s=>s.code===String(code));
+  if(!stock) return;
+  showStockResult(stock);
+  loadYahooTechnical(stock);
+}
+
+function initSearch(){
+  const input=document.getElementById("search");
+  const btn=document.getElementById("searchBtn");
+  const clear=document.getElementById("clearBtn");
+
+  input.addEventListener("input", ()=>{
+    renderTable();
+    if(!input.value.trim()) closeResult();
+  });
+  input.addEventListener("keydown", e=>{
+    if(e.key==="Enter"){
+      e.preventDefault();
+      performSearch();
+    }
+  });
+  btn.addEventListener("click", performSearch);
+  clear.addEventListener("click", ()=>{
+    input.value="";
+    renderTable();
+    closeResult();
+    input.focus();
+  });
+}
+
+function renderTable(){
+  const arr=getFiltered();
+  const tbody=document.getElementById("tbody");
+  if(!arr.length){
+    tbody.innerHTML=`<tr><td colspan="6" style="padding:28px;text-align:center;color:#9badc7">
+      找不到符合條件的股票。可嘗試輸入：2330、台積電、半導體、記憶體、CPO、AI伺服器。
+    </td></tr>`;
+  } else tbody.innerHTML=arr.map(s=>{
+    const tags=tagsFor(s.code);
+    return `<tr class="stockRow" onclick="openStockDetail('${s.code}')">
+      <td class="code">${s.code}</td>
+      <td class="name">${s.name}</td>
+      <td><span class="market ${s.market}">${s.market==="L"?"上市":"上櫃"}</span></td>
+      <td>${s.industry||"未分類"}</td>
+      <td>${tags.length?tags.map(t=>`<span class="tag">${t}</span>`).join(" "):'<span class="muted">—</span>'}</td>
+      <td><button class="finBtn" type="button" onclick="event.stopPropagation(); openFinancial('${s.code}','${s.market}')">看財報</button></td>
+    </tr>`;
+  }).join("");
+  const l=arr.filter(x=>x.market==="L").length, o=arr.filter(x=>x.market==="O").length;
+  document.getElementById("summary").innerHTML=
+    `<span class="pill">符合：${arr.length} 檔</span><span class="pill">上市：${l}</span><span class="pill">上櫃：${o}</span>`;
+}
+window.addEventListener("resize",()=>{
+  if(techChartState){
+    const st=techChartState;
+    drawTechnicalChart(st.dates,st.closes,st.ma5,st.ma10,st.ma20,st.ma60,st.selectedIndex);
+    if(techVolumeState) drawVolumeChart(techVolumeState.volumes,st.selectedIndex);
+  }
+});
+initSearch();
+loadOfficial();
+</script>
+</body>
+</html>
