@@ -302,6 +302,17 @@ const subTags = {
 let stocks = [];
 let active = {type:"all", value:"ALL"};
 
+const manualMemoryStocks = [
+  {code:"6770",name:"力積電",market:"L",industry:"半導體業"},
+  {code:"2451",name:"創見",market:"L",industry:"半導體業"},
+  {code:"4967",name:"十銓",market:"L",industry:"半導體業"},
+  {code:"3260",name:"威剛",market:"O",industry:"半導體業"},
+  {code:"3006",name:"晶豪科",market:"L",industry:"半導體業"},
+  {code:"6485",name:"點序",market:"O",industry:"半導體業"},
+  {code:"5289",name:"宜鼎",market:"O",industry:"電腦及週邊設備業"},
+  {code:"8299",name:"群聯",market:"O",industry:"半導體業"}
+];
+
 const fallback = [
  ["2330","台積電","L","半導體業"],["2303","聯電","L","半導體業"],["2454","聯發科","L","半導體業"],
  ["2344","華邦電","L","半導體業"],["2408","南亞科","L","半導體業"],["2337","旺宏","L","半導體業"],
@@ -343,7 +354,7 @@ async function loadOfficial(){
   }catch(e){ console.warn("TPEx API",e); }
 
   const uniq = new Map();
-  [...got,...fallback].forEach(s=>{ if(!uniq.has(s.code)) uniq.set(s.code,s); });
+  [...manualMemoryStocks,...got,...fallback].forEach(s=>{ if(!uniq.has(s.code)) uniq.set(s.code,s); });
   stocks=[...uniq.values()];
   if(got.length>100){
     status.textContent=`官方資料已載入｜${stocks.length} 檔`;
