@@ -1,4 +1,5 @@
 # GitHub Pages deployment workflow
+# Pages source confirmed: GitHub Actions
 name: Deploy static site to GitHub Pages
 
 on:
