@@ -595,8 +595,15 @@ const technicalTimeframes={
 };
 let activeTimeframeKey="1d";
 let currentTechStock=null;
-async function fetchWithTimeout(url,timeoutMs=7000){
+let activeTechnicalAbortController=null;
+
+async function fetchWithTimeout(url,timeoutMs=7000,externalSignal=null){
   const controller=new AbortController();
+  const abortFromOutside=()=>controller.abort();
+  if(externalSignal){
+    if(externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener("abort",abortFromOutside,{once:true});
+  }
   const timer=setTimeout(()=>controller.abort(),timeoutMs);
   try{
     const response=await fetch(url,{cache:"no-store",signal:controller.signal});
@@ -604,6 +611,7 @@ async function fetchWithTimeout(url,timeoutMs=7000){
     return response;
   }finally{
     clearTimeout(timer);
+    if(externalSignal) externalSignal.removeEventListener("abort",abortFromOutside);
   }
 }
 
@@ -1111,6 +1119,9 @@ async function loadYahooTechnical(stock,timeframeKey=activeTimeframeKey){
   const retry=document.getElementById("retryTech");
   if(retry) retry.onclick=()=>loadYahooTechnical(stock,selectedKey);
   const requestToken=++technicalLoadToken;
+  if(activeTechnicalAbortController) activeTechnicalAbortController.abort();
+  const requestController=new AbortController();
+  activeTechnicalAbortController=requestController;
 
   async function fetchYahoo(){
     const yahooUrl="https://query1.finance.yahoo.com/v8/finance/chart/"+encodeURIComponent(ticker)+"?range="+encodeURIComponent(config.range)+"&interval="+encodeURIComponent(config.sourceInterval||config.interval)+"&includePrePost=false&events=div%2Csplits";
@@ -1121,7 +1132,7 @@ async function loadYahooTechnical(stock,timeframeKey=activeTimeframeKey){
     ];
 
     const fetchAttempt=async url=>{
-      const response=await fetchWithTimeout(url,7000);
+      const response=await fetchWithTimeout(url,7000,requestController.signal);
       const json=await response.json();
       const result=json?.chart?.result?.[0];
       if(!result) throw new Error("Yahoo 無有效資料");
@@ -1152,7 +1163,7 @@ async function loadYahooTechnical(stock,timeframeKey=activeTimeframeKey){
     startDate.setMonth(startDate.getMonth()-months);
     const ds=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
     const url="https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id="+encodeURIComponent(stock.code)+"&start_date="+ds(startDate)+"&end_date="+ds(endDate);
-    const response=await fetchWithTimeout(url,8000);
+    const response=await fetchWithTimeout(url,8000,requestController.signal);
     const json=await response.json();
     const rows=(json.data||[]).filter(x=>x.close!=null);
     if(!rows.length) throw new Error("FinMind 無資料");
@@ -1220,6 +1231,7 @@ async function loadYahooTechnical(stock,timeframeKey=activeTimeframeKey){
       drawVolumeChart(volumes,null);
       initInteractiveVolumeChart();
     }));
+    if(activeTechnicalAbortController===requestController) activeTechnicalAbortController=null;
     panel.scrollIntoView({behavior:"smooth",block:"start"});
   }catch(err){
     if(requestToken!==technicalLoadToken) return;
