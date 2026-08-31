@@ -595,6 +595,17 @@ const technicalTimeframes={
 };
 let activeTimeframeKey="1d";
 let currentTechStock=null;
+async function fetchWithTimeout(url,timeoutMs=7000){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+    const response=await fetch(url,{cache:"no-store",signal:controller.signal});
+    if(!response.ok) throw new Error("HTTP "+response.status);
+    return response;
+  }finally{
+    clearTimeout(timer);
+  }
+}
 
 function drawPriceSelection(ctx,state,selectedIndex){
   if(selectedIndex==null || selectedIndex<0 || selectedIndex>=state.dates.length) return;
@@ -1029,7 +1040,7 @@ function initInteractiveVolumeChart(){
   });
 }
 
-async function aggregateCandleData(data,targetKey){
+function aggregateCandleData(data,targetKey){
   if(!["10m","1wk","1mo"].includes(targetKey)) return data;
   const buckets=new Map();
   const toNumber=value=>value==null?null:Number(value);
@@ -1105,32 +1116,34 @@ async function loadYahooTechnical(stock,timeframeKey=activeTimeframeKey){
     const yahooUrl="https://query1.finance.yahoo.com/v8/finance/chart/"+encodeURIComponent(ticker)+"?range="+encodeURIComponent(config.range)+"&interval="+encodeURIComponent(config.sourceInterval||config.interval)+"&includePrePost=false&events=div%2Csplits";
     const attempts=[
       yahooUrl,
-      `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`,
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`
+      "https://corsproxy.io/?"+encodeURIComponent(yahooUrl),
+      "https://api.allorigins.win/raw?url="+encodeURIComponent(yahooUrl)
     ];
-    let lastErr=null;
-    for(const u of attempts){
-      try{
-        const r=await fetch(u,{cache:"no-store"});
-        if(!r.ok) throw new Error("HTTP "+r.status);
-        const j=await r.json();
-        const res=j?.chart?.result?.[0];
-        if(!res) throw new Error("Yahoo 無有效資料");
-        const q=res.indicators?.quote?.[0]||{};
-        const raw={
-          source:"Yahoo Finance",
-          timestamps:res.timestamp||[],
-          open:q.open||[], high:q.high||[], low:q.low||[],
-          close:q.close||[], volume:q.volume||[],
-          meta:res.meta||{}
-        };
-        return aggregateCandleData(raw,selectedKey);
-      }catch(e){ lastErr=e; }
-    }
-    throw lastErr||new Error("Yahoo 載入失敗");
+
+    const fetchAttempt=async url=>{
+      const response=await fetchWithTimeout(url,7000);
+      const json=await response.json();
+      const result=json?.chart?.result?.[0];
+      if(!result) throw new Error("Yahoo 無有效資料");
+      const quote=result.indicators?.quote?.[0]||{};
+      return {
+        source:"Yahoo Finance",
+        timestamps:result.timestamp||[],
+        open:quote.open||[],
+        high:quote.high||[],
+        low:quote.low||[],
+        close:quote.close||[],
+        volume:quote.volume||[],
+        meta:result.meta||{}
+      };
+    };
+
+    const raw=await Promise.any(attempts.map(fetchAttempt));
+    return aggregateCandleData(raw,selectedKey);
   }
 
   async function fetchFinMind(){
+    if(["5  async function fetchFinMind(){
     if(["5m","10m","30m","60m"].includes(selectedKey)){
       throw new Error("此週期需要 Yahoo Finance 的盤中資料");
     }
@@ -1140,10 +1153,9 @@ async function loadYahooTechnical(stock,timeframeKey=activeTimeframeKey){
     startDate.setMonth(startDate.getMonth()-months);
     const ds=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
     const url="https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id="+encodeURIComponent(stock.code)+"&start_date="+ds(startDate)+"&end_date="+ds(endDate);
-    const r=await fetch(url,{cache:"no-store"});
-    if(!r.ok) throw new Error("FinMind HTTP "+r.status);
-    const j=await r.json();
-    const rows=(j.data||[]).filter(x=>x.close!=null);
+    const response=await fetchWithTimeout(url,8000);
+    const json=await response.json();
+    const rows=(json.data||[]).filter(x=>x.close!=null);
     if(!rows.length) throw new Error("FinMind 無資料");
     const raw={
       source:"台股交易所資料備援",
@@ -1174,6 +1186,7 @@ async function loadYahooTechnical(stock,timeframeKey=activeTimeframeKey){
       technicalDataCache.set(cacheKey,data);
     }
 
+    if(!data || !Array.isArray(data.timestamps) || !data.timestamps.length) throw new Error("沒有可繪製的歷史行情");
     const ts=data.timestamps, closes=data.close, opens=data.open, highs=data.high, lows=data.low, volumes=data.volume;
     const ma5=sma(closes,5), ma10=sma(closes,10), ma20=sma(closes,20), ma60=sma(closes,60);
     const valid=closes.map((v,i)=>(v!=null&&Number.isFinite(v))?i:null).filter(i=>i!=null);
@@ -1193,7 +1206,7 @@ async function loadYahooTechnical(stock,timeframeKey=activeTimeframeKey){
       <div class="techMetric"><span>MA20</span><b>${fmtNum(ma20[last],2)}</b></div>
       <div class="techMetric"><span>MA60</span><b>${fmtNum(ma60[last],2)}</b></div>
       <div class="techMetric"><span>資料來源</span><b>${data.source}</b></div>
-      <div class="techMetric"><span>筆數</span><b>${valid.length} 日</b></div>`;
+      <div class="techMetric"><span>筆數</span><b>${valid.length} ${config.label}線</b></div>`;
 
     document.getElementById("techStatus").textContent=
       data.source==="Yahoo Finance"
