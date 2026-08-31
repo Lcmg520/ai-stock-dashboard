@@ -53,6 +53,12 @@ select{background:#fffaf2;color:#3f3428;border:1px solid #233653;border-radius:1
 .techHead h3{margin:0;font-size:20px}
 .techStatus{font-size:12px;color:var(--muted)}
 .chartGrid{display:grid;grid-template-columns:1fr;gap:14px;margin-top:14px}
+.timeframeTabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.timeframeBtn{border:1px solid #22334d;background:#fffaf2;color:#000;border-radius:9px;padding:7px 11px;cursor:pointer;font-weight:700;font-size:12px}
+.timeframeBtn:hover,.timeframeBtn.active{border-color:#c7ae8d;background:#f6e6cf;box-shadow:inset 0 0 0 1px rgba(173,139,99,.18)}
+.timeframeBtn:focus-visible{outline:2px solid #8f6f4f;outline-offset:2px}
+@media(max-width:560px){.timeframeTabs{gap:5px}.timeframeBtn{padding:7px 9px}}
+
 .chartBox{background:#fffaf2;border:1px solid #20314b;border-radius:14px;padding:12px}
 .chartBox h4{margin:0 0 8px;font-size:13px;color:#a9bad2}
 .chartCanvas{width:100%;height:360px;display:block;background:#f5eadb;border-radius:10px}
@@ -187,7 +193,16 @@ input::placeholder{color:#555 !important;font-family:"DFKai-SB","標楷體","Bia
         <div class="techMetrics" id="techMetrics"></div>
         <div class="chartGrid">
           <div class="chartBox">
-            <h4>近 6 個月股價＋MA5 / MA10 / MA20 / MA60</h4>
+            <h4 id="priceChartHeading">日線｜股價＋MA5 / MA10 / MA20 / MA60</h4>
+            <div class="timeframeTabs" id="techTimeframeTabs" role="tablist" aria-label="技術分析週期">
+              <button class="timeframeBtn" type="button" role="tab" aria-selected="false" data-timeframe="5m">5分</button>
+              <button class="timeframeBtn" type="button" role="tab" aria-selected="false" data-timeframe="10m">10分</button>
+              <button class="timeframeBtn" type="button" role="tab" aria-selected="false" data-timeframe="30m">30分</button>
+              <button class="timeframeBtn" type="button" role="tab" aria-selected="false" data-timeframe="60m">60分</button>
+              <button class="timeframeBtn active" type="button" role="tab" aria-selected="true" data-timeframe="1d">日</button>
+              <button class="timeframeBtn" type="button" role="tab" aria-selected="false" data-timeframe="1wk">周</button>
+              <button class="timeframeBtn" type="button" role="tab" aria-selected="false" data-timeframe="1mo">月</button>
+            </div>
             <div class="interactiveChartWrap" id="interactiveChartWrap">
             <canvas id="priceCanvas" class="chartCanvas" width="1200" height="360" tabindex="0" aria-label="可互動技術分析線圖"></canvas>
             <div class="chartTooltip" id="chartTooltip" aria-live="polite"></div>
@@ -569,6 +584,17 @@ const technicalDataCache = new Map();
 let technicalLoadToken=0;
 let chartInteractionFrame=null;
 let pendingChartInteraction=null;
+const technicalTimeframes={
+  "5m":{label:"5分",interval:"5m",sourceInterval:"5m",range:"5d",rangeLabel:"近 5 個交易日"},
+  "10m":{label:"10分",interval:"10m",sourceInterval:"5m",range:"1mo",rangeLabel:"近 1 個月"},
+  "30m":{label:"30分",interval:"30m",sourceInterval:"30m",range:"3mo",rangeLabel:"近 3 個月"},
+  "60m":{label:"60分",interval:"60m",sourceInterval:"60m",range:"1y",rangeLabel:"近 1 年"},
+  "1d":{label:"日",interval:"1d",sourceInterval:"1d",range:"6mo",rangeLabel:"近 6 個月"},
+  "1wk":{label:"周",interval:"1wk",sourceInterval:"1wk",range:"5y",rangeLabel:"近 5 年"},
+  "1mo":{label:"月",interval:"1mo",sourceInterval:"1mo",range:"max",rangeLabel:"月線歷史資料"}
+};
+let activeTimeframeKey="1d";
+let currentTechStock=null;
 
 function drawPriceSelection(ctx,state,selectedIndex){
   if(selectedIndex==null || selectedIndex<0 || selectedIndex>=state.dates.length) return;
@@ -602,6 +628,7 @@ function drawTechnicalChart(dates, closes, ma5, ma10, ma20, ma60, selectedIndex=
   const c=document.getElementById("priceCanvas");
   const ctx=c.getContext("2d");
   const {w,h,dpr}=resizeCanvasToCss(c);
+  const timeframeKey=activeTimeframeKey;
   const sameData=techChartState &&
     techChartState.dates===dates &&
     techChartState.closes===closes &&
@@ -611,6 +638,7 @@ function drawTechnicalChart(dates, closes, ma5, ma10, ma20, ma60, selectedIndex=
     techChartState.ma60===ma60 &&
     techChartState.w===w &&
     techChartState.h===h &&
+    techChartState.timeframeKey===timeframeKey &&
     techChartState.baseCanvas;
 
   if(sameData){
@@ -642,7 +670,7 @@ function drawTechnicalChart(dates, closes, ma5, ma10, ma20, ma60, selectedIndex=
   const x=i=>pad.l+(w-pad.l-pad.r)*(i/denominator);
   const y=v=>pad.t+(h-pad.t-pad.b)*(1-(v-min)/(max-min));
 
-  const state={dates,closes,ma5,ma10,ma20,ma60,w,h,dpr,pad,min,max,x,y,selectedIndex:null,baseCanvas:null};
+  const state={dates,closes,ma5,ma10,ma20,ma60,w,h,dpr,pad,min,max,x,y,timeframeKey,selectedIndex:null,baseCanvas:null};
   techChartState=state;
 
   ctx.clearRect(0,0,w,h);
@@ -692,7 +720,11 @@ function drawTechnicalChart(dates, closes, ma5, ma10, ma20, ma60, selectedIndex=
   for(let j=0;j<tickCount;j++){
     const i=Math.round((dates.length-1)*j/(tickCount-1));
     const dt=new Date(dates[i]*1000);
-    const label=(dt.getMonth()+1)+"/"+dt.getDate();
+    const label=["5m","10m","30m","60m"].includes(timeframeKey)
+      ? String(dt.getHours()).padStart(2,"0")+":"+String(dt.getMinutes()).padStart(2,"0")
+      : timeframeKey==="1mo"
+        ? dt.getFullYear()+"/"+(dt.getMonth()+1)
+        : (dt.getMonth()+1)+"/"+dt.getDate();
     const xx=x(i);
     ctx.fillText(label,Math.max(pad.l,xx-15*dpr),h-8*dpr);
   }
@@ -728,7 +760,10 @@ function showChartTooltip(index, clientX=null, clientY=null){
   const wrap=document.getElementById("interactiveChartWrap");
   if(!st||!tip||!wrap||index<0||index>=st.dates.length) return;
   const dt=new Date(st.dates[index]*1000);
-  const dateLabel=`${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,"0")}/${String(dt.getDate()).padStart(2,"0")}`;
+  const isIntraday=["5m","10m","30m","60m"].includes(st.timeframeKey||activeTimeframeKey);
+  const dateLabel=isIntraday
+    ? dt.getFullYear()+"/"+String(dt.getMonth()+1).padStart(2,"0")+"/"+String(dt.getDate()).padStart(2,"0")+" "+String(dt.getHours()).padStart(2,"0")+":"+String(dt.getMinutes()).padStart(2,"0")
+    : dt.getFullYear()+"/"+String(dt.getMonth()+1).padStart(2,"0")+"/"+String(dt.getDate()).padStart(2,"0");
   const volumeValue=techVolumeState?.volumes?.[index];
   tip.innerHTML=`<b>${dateLabel}</b><br>
     收盤：${fmtNum(st.closes[index],2)}<br>
@@ -906,7 +941,10 @@ function showVolumeTooltip(index, clientX=null, clientY=null){
   if(!tip||!wrap||!st||!vst||index<0||index>=vst.volumes.length) return;
 
   const dt=new Date(st.dates[index]*1000);
-  const dateLabel=`${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,"0")}/${String(dt.getDate()).padStart(2,"0")}`;
+  const isIntraday=["5m","10m","30m","60m"].includes(st.timeframeKey||activeTimeframeKey);
+  const dateLabel=isIntraday
+    ? dt.getFullYear()+"/"+String(dt.getMonth()+1).padStart(2,"0")+"/"+String(dt.getDate()).padStart(2,"0")+" "+String(dt.getHours()).padStart(2,"0")+":"+String(dt.getMinutes()).padStart(2,"0")
+    : dt.getFullYear()+"/"+String(dt.getMonth()+1).padStart(2,"0")+"/"+String(dt.getDate()).padStart(2,"0");
   const vol=vst.volumes[index];
   tip.innerHTML=`<b>${dateLabel}</b><br>成交量：${fmtNum(vol,0)}`;
   tip.classList.add("show");
@@ -991,20 +1029,80 @@ function initInteractiveVolumeChart(){
   });
 }
 
-async function loadYahooTechnical(stock){
+async function aggregateCandleData(data,targetKey){
+  if(!["10m","1wk","1mo"].includes(targetKey)) return data;
+  const buckets=new Map();
+  const toNumber=value=>value==null?null:Number(value);
+
+  for(let i=0;i<data.timestamps.length;i++){
+    const timestamp=Number(data.timestamps[i]);
+    const close=toNumber(data.close[i]);
+    if(!Number.isFinite(timestamp)||!Number.isFinite(close)) continue;
+
+    const dt=new Date(timestamp*1000);
+    let bucket;
+    if(targetKey==="10m"){
+      bucket=Math.floor(timestamp/600)*600;
+    }else if(targetKey==="1wk"){
+      const weekStart=new Date(Date.UTC(dt.getUTCFullYear(),dt.getUTCMonth(),dt.getUTCDate()));
+      const day=(weekStart.getUTCDay()+6)%7;
+      weekStart.setUTCDate(weekStart.getUTCDate()-day);
+      bucket=Math.floor(weekStart.getTime()/1000);
+    }else{
+      bucket=Math.floor(Date.UTC(dt.getUTCFullYear(),dt.getUTCMonth(),1)/1000);
+    }
+
+    const open=toNumber(data.open[i]);
+    const high=toNumber(data.high[i]);
+    const low=toNumber(data.low[i]);
+    const volume=toNumber(data.volume[i])||0;
+    let bar=buckets.get(bucket);
+    if(!bar){
+      bar={timestamp,open:open??close,high:high??close,low:low??close,close,volume};
+      buckets.set(bucket,bar);
+    }else{
+      if(high!=null && Number.isFinite(high)) bar.high=Math.max(bar.high,high);
+      if(low!=null && Number.isFinite(low)) bar.low=Math.min(bar.low,low);
+      bar.close=close;
+      bar.timestamp=timestamp;
+      bar.volume+=volume;
+    }
+  }
+
+  const rows=Array.from(buckets.values()).sort((a,b)=>a.timestamp-b.timestamp);
+  return {
+    source:data.source,
+    timestamps:rows.map(x=>x.timestamp),
+    open:rows.map(x=>x.open),
+    high:rows.map(x=>x.high),
+    low:rows.map(x=>x.low),
+    close:rows.map(x=>x.close),
+    volume:rows.map(x=>x.volume),
+    meta:data.meta||{}
+  };
+}
+
+async function loadYahooTechnical(stock,timeframeKey=activeTimeframeKey){
+  const selectedKey=technicalTimeframes[timeframeKey] ? timeframeKey : "1d";
+  const config=technicalTimeframes[selectedKey];
+  activeTimeframeKey=selectedKey;
+  currentTechStock=stock;
+  updateTimeframeTabs();
   const panel=document.getElementById("techPanel");
   panel.classList.add("show");
   const ticker=yahooTickerFor(stock);
   document.getElementById("techTitle").textContent=`${stock.name}｜技術分析`;
+  const priceChartHeading=document.getElementById("priceChartHeading");
+  if(priceChartHeading) priceChartHeading.textContent=config.label+"線｜股價＋MA5 / MA10 / MA20 / MA60";
   document.getElementById("techTicker").textContent=ticker;
   document.getElementById("techStatus").textContent="正在載入歷史行情…";
   document.getElementById("yahooLink").href=`https://tw.stock.yahoo.com/quote/${stock.code}.TW/technical-analysis`;
   const retry=document.getElementById("retryTech");
-  if(retry) retry.onclick=()=>loadYahooTechnical(stock);
+  if(retry) retry.onclick=()=>loadYahooTechnical(stock,selectedKey);
   const requestToken=++technicalLoadToken;
 
   async function fetchYahoo(){
-    const yahooUrl=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=6mo&interval=1d&includePrePost=false&events=div%2Csplits`;
+    const yahooUrl="https://query1.finance.yahoo.com/v8/finance/chart/"+encodeURIComponent(ticker)+"?range="+encodeURIComponent(config.range)+"&interval="+encodeURIComponent(config.sourceInterval||config.interval)+"&includePrePost=false&events=div%2Csplits";
     const attempts=[
       yahooUrl,
       `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`,
@@ -1019,30 +1117,35 @@ async function loadYahooTechnical(stock){
         const res=j?.chart?.result?.[0];
         if(!res) throw new Error("Yahoo 無有效資料");
         const q=res.indicators?.quote?.[0]||{};
-        return {
+        const raw={
           source:"Yahoo Finance",
           timestamps:res.timestamp||[],
           open:q.open||[], high:q.high||[], low:q.low||[],
           close:q.close||[], volume:q.volume||[],
           meta:res.meta||{}
         };
+        return aggregateCandleData(raw,selectedKey);
       }catch(e){ lastErr=e; }
     }
     throw lastErr||new Error("Yahoo 載入失敗");
   }
 
   async function fetchFinMind(){
+    if(["5m","10m","30m","60m"].includes(selectedKey)){
+      throw new Error("此週期需要 Yahoo Finance 的盤中資料");
+    }
     const endDate=new Date();
     const startDate=new Date();
-    startDate.setMonth(startDate.getMonth()-7);
-    const ds=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-    const url=`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${encodeURIComponent(stock.code)}&start_date=${ds(startDate)}&end_date=${ds(endDate)}`;
+    const months=selectedKey==="1mo" ? 60 : selectedKey==="1wk" ? 24 : 7;
+    startDate.setMonth(startDate.getMonth()-months);
+    const ds=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    const url="https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id="+encodeURIComponent(stock.code)+"&start_date="+ds(startDate)+"&end_date="+ds(endDate);
     const r=await fetch(url,{cache:"no-store"});
     if(!r.ok) throw new Error("FinMind HTTP "+r.status);
     const j=await r.json();
     const rows=(j.data||[]).filter(x=>x.close!=null);
     if(!rows.length) throw new Error("FinMind 無資料");
-    return {
+    const raw={
       source:"台股交易所資料備援",
       timestamps:rows.map(x=>Math.floor(new Date(x.date+"T00:00:00+08:00").getTime()/1000)),
       open:rows.map(x=>Number(x.open)),
@@ -1052,10 +1155,11 @@ async function loadYahooTechnical(stock){
       volume:rows.map(x=>Number(x.Trading_Volume)),
       meta:{}
     };
+    return aggregateCandleData(raw,selectedKey);
   }
 
   try{
-    const cacheKey=ticker;
+    const cacheKey=ticker+":"+selectedKey;
     let data=technicalDataCache.get(cacheKey);
     if(!data){
       try{
@@ -1093,11 +1197,12 @@ async function loadYahooTechnical(stock){
 
     document.getElementById("techStatus").textContent=
       data.source==="Yahoo Finance"
-      ? "Yahoo Finance 歷史日線已載入｜近 6 個月"
-      : "Yahoo 受到瀏覽器限制，已自動改用台股交易所歷史行情繪圖";
+      ? "Yahoo Finance "+config.label+"線已載入｜"+config.rangeLabel
+      : "Yahoo 受到瀏覽器限制，已自動改用台股交易所歷史行情繪圖｜"+config.label+"線";
 
     // Give layout one frame to become visible before measuring canvases.
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if(requestToken!==technicalLoadToken || activeTimeframeKey!==selectedKey) return;
       drawTechnicalChart(ts,closes,ma5,ma10,ma20,ma60,null);
       initInteractiveTechnicalChart();
       drawVolumeChart(volumes,null);
@@ -1120,6 +1225,32 @@ function openFinancial(code,market){
   const ticker = code + suffix;
   const url = `https://tw.stock.yahoo.com/quote/${ticker}/financials`;
   window.open(url,"_blank","noopener");
+}
+
+function updateTimeframeTabs(){
+  document.querySelectorAll("#techTimeframeTabs [data-timeframe]").forEach(button=>{
+    const isActive=button.dataset.timeframe===activeTimeframeKey;
+    button.classList.toggle("active",isActive);
+    button.setAttribute("aria-selected",String(isActive));
+  });
+}
+
+function selectTechnicalTimeframe(timeframeKey){
+  if(!technicalTimeframes[timeframeKey]) return;
+  activeTimeframeKey=timeframeKey;
+  updateTimeframeTabs();
+  if(currentTechStock) loadYahooTechnical(currentTechStock,timeframeKey);
+}
+
+function initTimeframeTabs(){
+  const tabs=document.getElementById("techTimeframeTabs");
+  if(!tabs || tabs.dataset.ready==="1") return;
+  tabs.dataset.ready="1";
+  tabs.addEventListener("click",event=>{
+    const button=event.target.closest("[data-timeframe]");
+    if(button) selectTechnicalTimeframe(button.dataset.timeframe);
+  });
+  updateTimeframeTabs();
 }
 
 function openStockDetail(code){
@@ -1188,6 +1319,7 @@ window.addEventListener("resize",()=>{
   });
 });
 initSearch();
+initTimeframeTabs();
 loadOfficial();
 </script>
 </body>
